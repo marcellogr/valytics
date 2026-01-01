@@ -1,0 +1,360 @@
+---
+title: "Interpreting Results"
+author: "Marcello"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Interpreting Results}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 6,
+  fig.height = 4,
+  fig.align = "center"
+)
+```
+
+## Introduction
+
+Statistical significance and clinical relevance are not the same thing. A method comparison study may yield statistically significant differences between methods that are clinically negligible, or conversely, reveal clinically important biases that fail to reach statistical significance in small samples.
+
+This vignette focuses on the interpretive aspects of method comparison, helping you translate statistical outputs from `valytics` into meaningful conclusions for your specific application.
+
+```{r load}
+library(valytics)
+library(ggplot2)
+```
+
+## Framework for Interpretation
+
+Before analyzing data, establish your acceptance criteria. These should be based on:
+
+1. **Clinical decision points**: What measurement thresholds trigger clinical action?
+2. **Biological variation**: How much does the analyte naturally vary within and between individuals?
+3. **Total allowable error**: What combined bias and imprecision is acceptable for the intended use?
+4. **Regulatory requirements**: Do applicable guidelines specify performance criteria?
+
+Without predefined criteria, there is a temptation to rationalize whatever results emerge, undermining the objectivity of the comparison.
+
+## Interpreting Bland-Altman Results
+
+### Understanding Bias
+
+The mean difference (bias) quantifies systematic deviation between methods:
+
+```{r ba-example}
+data("creatinine_serum")
+ba <- ba_analysis(
+  x = creatinine_serum$enzymatic,
+  y = creatinine_serum$jaffe
+)
+summary(ba)
+```
+
+Key questions to address:
+
+**Is the bias statistically significant?**
+The confidence interval for the mean difference tells us whether the observed bias is distinguishable from zero. If the 95% CI excludes zero, the bias is statistically significant at the 0.05 level.
+
+**Is the bias clinically meaningful?**
+This depends entirely on context. For creatinine, a bias of 0.1 mg/dL may be trivial at high concentrations but could affect clinical staging of kidney disease near diagnostic thresholds.
+
+Consider expressing bias relative to clinical decision points:
+
+```{r bias-context}
+# Example: creatinine threshold for CKD Stage 3 is ~1.2-1.5 mg/dL
+bias <- ba$results$bias
+cat("Observed bias:", round(bias, 3), "mg/dL\n")
+cat("As percentage of CKD threshold (1.3 mg/dL):",
+    round(100 * abs(bias) / 1.3, 1), "%\n")
+```
+
+### Interpreting Limits of Agreement
+
+The 95% limits of agreement (LoA) define the range within which most differences fall. These are often more clinically relevant than the bias alone.
+
+```{r loa-interpretation}
+loa_lower <- ba$results$loa_lower
+loa_upper <- ba$results$loa_upper
+
+cat("95% Limits of Agreement:\n")
+cat("  Lower:", round(loa_lower, 3), "mg/dL\n")
+cat("  Upper:", round(loa_upper, 3), "mg/dL\n")
+cat("  Range:", round(loa_upper - loa_lower, 3), "mg/dL\n")
+```
+
+Ask yourself: If two methods can differ by as much as the LoA range for the same sample, would this affect clinical decisions?
+
+### Checking Assumptions
+
+The validity of LoA depends on normally distributed differences. Check this with the Shapiro-Wilk test (reported in `summary()`) and visually:
+
+```{r normality-check, fig.cap = "Histogram of differences to assess normality."}
+# Extract differences
+differences <- ba$results$differences
+
+# Visual check
+ggplot(data.frame(diff = differences), aes(x = diff)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 15,
+                 fill = "steelblue", alpha = 0.7) +
+  geom_density(linewidth = 1) +
+  labs(x = "Difference (Jaffe - Enzymatic)", y = "Density") +
+  theme_minimal()
+```
+
+If differences are substantially non-normal, consider:
+
+- Logarithmic transformation for skewed data
+- Percentage differences if variability increases with magnitude
+- Non-parametric approaches
+
+### Detecting Proportional Bias
+
+A constant bias affects all measurements equally, but proportional bias means the difference depends on the measurement magnitude. The Bland-Altman plot can reveal this:
+
+```{r proportional-bias, fig.cap = "Bland-Altman plot - look for trends indicating proportional bias."}
+plot(ba)
+```
+
+Signs of proportional bias include:
+
+- Differences that increase (or decrease) systematically with the average value
+- A "fan" pattern where variability changes across the measurement range
+- Regression of differences on averages with a significant slope
+
+If proportional bias is present, Passing-Bablok regression is particularly informative, as the slope quantifies the proportional relationship.
+
+## Interpreting Passing-Bablok Results
+
+### Slope and Intercept
+
+Passing-Bablok regression addresses two questions directly:
+
+```{r pb-example}
+pb <- pb_regression(
+  x = creatinine_serum$enzymatic,
+  y = creatinine_serum$jaffe
+)
+summary(pb)
+```
+
+**Slope interpretation:**
+
+- Slope = 1: Methods have the same proportional response
+- Slope > 1: Method Y gives higher values as concentration increases
+- Slope < 1: Method Y gives lower values as concentration increases
+
+The confidence interval is key. If it includes 1, we cannot conclude proportional bias exists.
+
+**Intercept interpretation:**
+
+- Intercept = 0: No constant systematic difference
+- Intercept > 0: Method Y consistently reads higher by a fixed amount
+- Intercept < 0: Method Y consistently reads lower by a fixed amount
+
+Again, check whether the confidence interval includes zero.
+
+### Clinical Translation
+
+Translate regression parameters into practical terms:
+
+```{r pb-translation}
+slope <- pb$results$slope
+intercept <- pb$results$intercept
+
+# At a clinical decision point
+decision_point <- 1.3  # mg/dL for CKD staging
+expected_y <- intercept + slope * decision_point
+
+cat("At enzymatic creatinine =", decision_point, "mg/dL:\n")
+cat("Expected Jaffe result:", round(expected_y, 3), "mg/dL\n")
+cat("Difference:", round(expected_y - decision_point, 3), "mg/dL\n")
+```
+
+This type of calculation shows whether differences at specific clinical thresholds could affect patient classification.
+
+### Linearity Assessment
+
+The CUSUM test evaluates whether the linear model is appropriate:
+
+```{r cusum-check}
+cat("CUSUM test p-value:", round(pb$cusum$p_value, 3), "\n")
+if (pb$cusum$p_value < 0.05) {
+  cat("Significant non-linearity detected.\n")
+} else {
+  cat("No significant deviation from linearity.\n")
+}
+```
+
+```{r cusum-plot, fig.cap = "CUSUM plot for linearity assessment."}
+plot(pb, type = "cusum")
+```
+
+Non-linearity suggests that the relationship between methods changes across the measurement range. This could indicate:
+
+- Matrix effects at certain concentrations
+- Interference affecting one method differently across the range
+- Calibration issues at the extremes
+
+If non-linearity is present, consider analyzing subranges separately or applying transformations.
+
+## Common Interpretation Pitfalls
+
+### Pitfall 1: Relying on Correlation
+
+Correlation coefficients are frequently reported in method comparison studies but are often misleading:
+
+```{r correlation-pitfall}
+# High correlation can coexist with poor agreement
+cor_value <- cor(creatinine_serum$enzymatic, creatinine_serum$jaffe)
+cat("Correlation coefficient:", round(cor_value, 3), "\n")
+```
+
+A high correlation indicates that the methods rank samples similarly, not that they give the same values. Methods with perfect correlation (r = 1) but different calibrations would show systematic bias that correlation fails to detect.
+
+### Pitfall 2: Ignoring Sample Characteristics
+
+Method comparison results depend on the sample population studied. Consider:
+
+- **Concentration range**: Bias may differ at low vs. high concentrations
+- **Sample types**: Fresh vs. frozen, arterial vs. venous
+- **Patient population**: Healthy volunteers vs. patients with interfering conditions
+
+Results from one population may not generalize to another.
+
+### Pitfall 3: Confusing Statistical and Clinical Significance
+
+```{r significance-example}
+# Example with a small but statistically significant bias
+n <- 200
+set.seed(42)
+x <- rnorm(n, mean = 100, sd = 15)
+y <- x + rnorm(n, mean = 0.5, sd = 2)  # Small bias of 0.5 units
+
+ba_demo <- ba_analysis(x, y)
+cat("Bias:", round(ba_demo$results$bias, 3), "\n")
+cat("95% CI for bias:", round(ba_demo$results$bias_ci["lower"], 3), "to",
+    round(ba_demo$results$bias_ci["upper"], 3), "\n")
+
+# The bias is statistically significant (CI excludes 0)
+# but may be clinically irrelevant depending on the application
+```
+
+Always interpret results in the context of what differences matter for patient care or regulatory compliance.
+
+### Pitfall 4: Overfitting Conclusions to Data
+
+Avoid the temptation to explain away unfavorable results or cherry-pick favorable subanalyses. If you established acceptance criteria before the study, stick to them. If results are borderline, acknowledge the uncertainty rather than forcing a definitive conclusion.
+
+## Reporting Recommendations
+
+A complete method comparison report should include:
+
+**Study design:**
+
+- Sample size and power considerations
+- Sample selection and handling
+- Measurement protocols for both methods
+
+**Statistical results:**
+
+- Bland-Altman: bias with 95% CI, LoA with 95% CI
+- Passing-Bablok: slope and intercept with 95% CIs, CUSUM p-value
+- Assessment of normality and linearity assumptions
+
+**Visualizations:**
+
+- Bland-Altman plot
+- Passing-Bablok scatter with regression line
+- CUSUM plot if linearity is questioned
+
+**Interpretation:**
+
+- Comparison to predefined acceptance criteria
+- Clinical implications at relevant decision points
+- Limitations and generalizability
+
+```{r report-example}
+# Example summary for a report
+cat("=== Method Comparison Summary ===\n\n")
+cat("Bland-Altman Analysis:\n")
+cat("  Bias:", round(ba$results$bias, 3), "mg/dL",
+    "(95% CI:", round(ba$results$bias_ci["lower"], 3), "to",
+    round(ba$results$bias_ci["upper"], 3), ")\n")
+cat("  LoA:", round(ba$results$loa_lower, 3), "to",
+    round(ba$results$loa_upper, 3), "mg/dL\n\n")
+
+cat("Passing-Bablok Regression:\n")
+cat("  Slope:", round(pb$results$slope, 3),
+    "(95% CI:", round(pb$results$slope_ci["lower"], 3), "to",
+    round(pb$results$slope_ci["upper"], 3), ")\n")
+cat("  Intercept:", round(pb$results$intercept, 3),
+    "(95% CI:", round(pb$results$intercept_ci["lower"], 3), "to",
+    round(pb$results$intercept_ci["upper"], 3), ")\n")
+cat("  CUSUM p-value:", round(pb$cusum$p_value, 3), "\n")
+```
+
+## Worked Example: Troponin Comparison
+
+Let us apply these principles to the cardiac troponin dataset, which presents additional challenges due to its wide dynamic range:
+
+```{r troponin-analysis}
+data("troponin_cardiac")
+
+# Bland-Altman with percentage differences (appropriate for wide range)
+ba_trop <- ba_analysis(
+  x = troponin_cardiac$platform_a,
+  y = troponin_cardiac$platform_b,
+  type = "percent"
+)
+summary(ba_trop)
+```
+
+```{r troponin-ba-plot, fig.cap = "Bland-Altman plot for troponin (percentage differences)."}
+plot(ba_trop)
+```
+
+```{r troponin-pb}
+pb_trop <- pb_regression(
+  x = troponin_cardiac$platform_a,
+  y = troponin_cardiac$platform_b
+)
+summary(pb_trop)
+```
+
+```{r troponin-pb-plot, fig.cap = "Passing-Bablok regression for troponin platforms."}
+plot(pb_trop, type = "scatter")
+```
+
+For troponin, clinical interpretation must consider:
+
+- The 99th percentile upper reference limit (diagnostic threshold)
+- Differences near this threshold that could affect acute MI diagnosis
+- Whether proportional differences are acceptable given the wide measurement range
+
+## Conclusion
+
+Rigorous interpretation of method comparison results requires:
+
+1. Predefined, clinically-grounded acceptance criteria
+2. Understanding of both statistical and clinical significance
+3. Careful assessment of assumptions underlying the statistical methods
+4. Transparent reporting of limitations
+
+The tools in `valytics` provide the statistical foundation; your domain expertise transforms those numbers into actionable conclusions.
+
+## References
+
+Bland JM, Altman DG. Statistical methods for assessing agreement between two methods of clinical measurement. Lancet. 1986;1(8476):307-310.
+
+Westgard JO, Hunt MR. Use and interpretation of common statistical tests in method-comparison studies. Clinical Chemistry. 1973;19(1):49-57.
+
+Linnet K. Necessary sample size for method comparison studies based on regression analysis. Clinical Chemistry. 1999;45(6):882-894.
+
+Passing H, Bablok W. A new biometrical procedure for testing the equality of measurements from two different analytical methods. Journal of Clinical Chemistry and Clinical Biochemistry. 1983;21(11):709-720.
+
+CLSI. Measurement Procedure Comparison and Bias Estimation Using Patient Samples; Approved Guideline. EP09-A3. Clinical and Laboratory Standards Institute; 2013.

@@ -1,0 +1,281 @@
+---
+title: "Method Comparison Workflow"
+author: "Marcello"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Method Comparison Workflow}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 6,
+  fig.height = 4,
+  fig.align = "center"
+)
+```
+
+## Introduction
+
+Method comparison studies are fundamental in clinical laboratories and biotech research. When introducing a new analytical method, we must demonstrate that it produces results comparable to an established reference method. This vignette walks through a complete method comparison workflow using the `valytics` package.
+
+The statistical approaches implemented in `valytics` follow well-established methodology from the clinical chemistry literature. We focus on two complementary techniques: Bland-Altman analysis for assessing agreement and Passing-Bablok regression for evaluating systematic differences.
+
+## Getting Started
+
+```{r load-package}
+library(valytics)
+library(ggplot2)
+```
+
+We will use the `glucose_methods` dataset included in the package. This dataset contains paired measurements from a point-of-care (POC) glucose meter and a laboratory reference analyzer on 60 patient samples.
+
+```{r load-data}
+data("glucose_methods")
+head(glucose_methods)
+```
+
+Before diving into statistical analysis, it is always good practice to visualize the raw data:
+
+```{r scatter-raw, fig.cap = "Scatter plot of POC vs laboratory glucose measurements with identity line."}
+ggplot(glucose_methods, aes(x = reference, y = poc_meter)) +
+  geom_point(alpha = 0.7) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray50") +
+  labs(
+    x = "Reference Method (mg/dL)",
+    y = "POC Meter (mg/dL)",
+    title = "Glucose Method Comparison"
+  ) +
+  coord_fixed() +
+  theme_minimal()
+```
+
+The points cluster around the identity line, suggesting reasonable agreement. Now let us quantify this agreement using appropriate statistical methods.
+
+## Bland-Altman Analysis
+
+Bland-Altman analysis, introduced by Bland and Altman (1986), assesses agreement between two measurement methods by examining the differences between paired measurements. Rather than correlation, which can be misleading for method comparison, this approach focuses on clinically meaningful questions: How large are the differences? Is there systematic bias?
+
+### Running the Analysis
+
+The `ba_analysis()` function accepts paired measurements as vectors or via a formula interface:
+
+```{r ba-analysis}
+# Vector interface
+ba <- ba_analysis(
+  x = glucose_methods$reference,
+  y = glucose_methods$poc_meter
+)
+
+# Alternative: formula interface
+# ba <- ba_analysis(reference ~ poc_meter, data = glucose_methods)
+
+ba
+```
+
+The print output shows the mean difference (bias) and the 95% limits of agreement (LoA). These limits represent the range within which 95% of differences between the two methods are expected to fall.
+
+### Interpreting Results
+
+The `summary()` method provides additional statistical details:
+
+```{r ba-summary}
+summary(ba)
+```
+
+Key outputs to examine:
+
+- **Bias**: The mean difference between methods. A bias significantly different from zero indicates systematic over- or under-estimation by one method.
+- **Limits of Agreement**: The 95% LoA define the expected range of differences. Whether these limits are clinically acceptable depends on the intended use of the measurement.
+- **Normality test**: The Shapiro-Wilk test checks whether differences follow a normal distribution, an assumption underlying the LoA calculation.
+
+### Visualization
+
+The Bland-Altman plot displays differences against the average of paired measurements:
+
+```{r ba-plot, fig.cap = "Bland-Altman plot showing bias and 95% limits of agreement."}
+plot(ba)
+```
+
+This plot reveals several important features:
+
+- Points scattered randomly around the bias line suggest no relationship between measurement magnitude and agreement.
+- The shaded bands represent 95% confidence intervals for the bias and LoA.
+- Points outside the LoA may warrant individual investigation.
+
+For publication-quality figures, you can use `autoplot()` with additional ggplot2 customization:
+
+```{r ba-autoplot, fig.cap = "Customized Bland-Altman plot."}
+autoplot(ba) +
+  labs(title = "POC Meter vs Reference Analyzer Agreement") +
+  theme_bw()
+```
+
+### Percentage Differences
+
+When the magnitude of measurements varies widely, percentage differences can be more informative than absolute differences:
+
+```{r ba-percent}
+ba_pct <- ba_analysis(
+  x = glucose_methods$reference,
+  y = glucose_methods$poc_meter,
+  type = "percent"
+)
+ba_pct
+```
+
+```{r ba-percent-plot, fig.cap = "Bland-Altman plot with percentage differences."}
+plot(ba_pct)
+```
+
+Percentage-based LoA are particularly useful when acceptable differences scale with measurement magnitude.
+
+## Passing-Bablok Regression
+
+While Bland-Altman analysis assesses overall agreement, Passing-Bablok regression (1983) specifically addresses two questions: Is there a constant bias (intercept different from 0)? Is there a proportional bias (slope different from 1)?
+
+This non-parametric regression method is robust to outliers and does not assume that measurement errors occur in only one method, making it well-suited for method comparison studies.
+
+### Running the Regression
+
+```{r pb-regression}
+pb <- pb_regression(
+  x = glucose_methods$reference,
+  y = glucose_methods$poc_meter
+)
+pb
+```
+
+### Interpreting Results
+
+```{r pb-summary}
+summary(pb)
+```
+
+The summary provides hypothesis tests and confidence intervals for the regression parameters:
+
+- **Intercept**: If the 95% CI includes 0, there is no evidence of constant systematic difference.
+- **Slope**: If the 95% CI includes 1, there is no evidence of proportional systematic difference.
+- **CUSUM test**: Assesses linearity of the relationship. A significant result (p < 0.05) suggests deviation from linearity.
+
+When both the intercept includes 0 and the slope includes 1, we conclude that the methods are statistically equivalent.
+
+### Visualization
+
+The scatter plot shows the fitted regression line with confidence band:
+
+```{r pb-scatter, fig.cap = "Passing-Bablok regression with 95% confidence band."}
+plot(pb, type = "scatter")
+```
+
+The dashed identity line (y = x) serves as a reference. If the methods were in perfect agreement, the regression line would coincide with the identity line.
+
+Residual plots help assess model assumptions:
+
+```{r pb-residuals, fig.cap = "Perpendicular residuals from Passing-Bablok regression."}
+plot(pb, type = "residuals")
+```
+
+Residuals should scatter randomly around zero without obvious patterns. Trends or heteroscedasticity may indicate violations of the linearity assumption.
+
+The CUSUM plot provides a visual assessment of linearity:
+
+```{r pb-cusum, fig.cap = "CUSUM plot for linearity assessment."}
+plot(pb, type = "cusum")
+```
+
+Points should remain within the boundary lines if the linear model is appropriate. Deviations suggest non-linear relationships that may require transformation or alternative modeling approaches.
+
+### Bootstrap Confidence Intervals
+
+For smaller sample sizes or when parametric assumptions are questionable, bootstrap confidence intervals provide a robust alternative:
+
+```{r pb-bootstrap}
+pb_boot <- pb_regression(
+  x = glucose_methods$reference,
+  y = glucose_methods$poc_meter,
+  ci_method = "bootstrap",
+  boot_n = 1999
+)
+summary(pb_boot)
+```
+
+The BCa (bias-corrected and accelerated) bootstrap method adjusts for potential bias and skewness in the bootstrap distribution.
+
+## Putting It All Together
+
+A complete method comparison report typically includes both analyses. Here is a summary workflow:
+
+```{r workflow-summary, eval = FALSE}
+# 1. Load and inspect data
+data("glucose_methods")
+
+# 2. Bland-Altman analysis for agreement assessment
+ba <- ba_analysis(reference ~ poc_meter, data = glucose_methods)
+summary(ba)
+plot(ba)
+
+# 3. Passing-Bablok regression for systematic differences
+pb <- pb_regression(reference ~ poc_meter, data = glucose_methods)
+summary(pb)
+plot(pb, type = "scatter")
+plot(pb, type = "cusum")
+
+# 4. Document conclusions
+# - Bias and LoA from Bland-Altman
+# - Slope and intercept CIs from Passing-Bablok
+# - Clinical interpretation based on acceptable performance criteria
+```
+
+## Handling Missing Data
+
+Both `ba_analysis()` and `pb_regression()` handle missing values through the `na_action` parameter:
+
+```{r missing-data}
+# Create data with missing values for demonstration
+glucose_missing <- glucose_methods
+glucose_missing$poc_meter[c(5, 15, 25)] <- NA
+
+# Default behavior: remove pairs with missing values
+ba_complete <- ba_analysis(
+  reference ~ poc_meter,
+  data = glucose_missing,
+  na_action = "omit"
+)
+
+# Require complete cases (will error if any NA present)
+# ba_strict <- ba_analysis(
+#   reference ~ poc_meter,
+#   data = glucose_missing,
+#   na_action = "fail"
+# )
+```
+
+## Additional Datasets
+
+The package includes two additional datasets for exploring different scenarios:
+
+```{r other-datasets}
+# Creatinine: enzymatic vs Jaffe methods
+data("creatinine_serum")
+head(creatinine_serum)
+
+# High-sensitivity troponin: two immunoassay platforms
+data("troponin_cardiac")
+head(troponin_cardiac)
+```
+
+These datasets represent different analytical challenges: the creatinine data includes known interferences affecting the Jaffe method at low concentrations, while the troponin data covers a wide dynamic range typical of cardiac biomarkers.
+
+## References
+
+Bland JM, Altman DG. Statistical methods for assessing agreement between two methods of clinical measurement. Lancet. 1986;1(8476):307-310.
+
+Bland JM, Altman DG. Measuring agreement in method comparison studies. Statistical Methods in Medical Research. 1999;8(2):135-160.
+
+Passing H, Bablok W. A new biometrical procedure for testing the equality of measurements from two different analytical methods. Journal of Clinical Chemistry and Clinical Biochemistry. 1983;21(11):709-720.
+
+Passing H, Bablok W. Comparison of several regression procedures for method comparison studies and determination of sample sizes. Journal of Clinical Chemistry and Clinical Biochemistry. 1984;22(6):431-445.
