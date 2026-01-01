@@ -2,10 +2,24 @@
 % Please edit documentation in R/ba_plot.R
 \name{plot.ba_analysis}
 \alias{plot.ba_analysis}
+\alias{autoplot.ba_analysis}
 \title{Plot method for ba_analysis objects}
 \usage{
 \method{plot}{ba_analysis}(
   x,
+  show_ci = TRUE,
+  show_points = TRUE,
+  point_alpha = 0.6,
+  point_size = 2,
+  line_colors = NULL,
+  title = NULL,
+  xlab = NULL,
+  ylab = NULL,
+  ...
+)
+
+\method{autoplot}{ba_analysis}(
+  object,
   show_ci = TRUE,
   show_points = TRUE,
   point_alpha = 0.6,
@@ -42,6 +56,8 @@ automatic title.}
 difference type.}
 
 \item{...}{Additional arguments (currently ignored).}
+
+\item{object}{An object of class \code{ba_analysis}.}
 }
 \value{
 A \code{ggplot} object that can be further customized.
@@ -94,6 +110,9 @@ library(ggplot2)
 plot(ba) +
   theme_minimal() +
   scale_color_brewer(palette = "Set1")
+
+# Using autoplot (ggplot2-style)
+autoplot(ba)
 
 }
 \seealso{

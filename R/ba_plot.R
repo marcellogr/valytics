@@ -67,43 +67,46 @@
 #'   theme_minimal() +
 #'   scale_color_brewer(palette = "Set1")
 #'
+#' # Using autoplot (ggplot2-style)
+#' autoplot(ba)
+#'
 #' @seealso
 #' [ba_analysis()] for performing the analysis,
 #' [summary.ba_analysis()] for detailed results
 #'
 #' @importFrom ggplot2 ggplot aes geom_point geom_hline geom_rect annotate
-#'   labs theme_bw theme element_text scale_y_continuous
+#'   labs theme_bw theme element_text scale_y_continuous coord_cartesian
 #' @export
 plot.ba_analysis <- function(x,
-                              show_ci = TRUE,
-                              show_points = TRUE,
-                              point_alpha = 0.6,
-                              point_size = 2,
-                              line_colors = NULL,
-                              title = NULL,
-                              xlab = NULL,
-                              ylab = NULL,
-                              ...) {
-
-
+                             show_ci = TRUE,
+                             show_points = TRUE,
+                             point_alpha = 0.6,
+                             point_size = 2,
+                             line_colors = NULL,
+                             title = NULL,
+                             xlab = NULL,
+                             ylab = NULL,
+                             ...) {
+  
+  
   # Check ggplot2 availability
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
     stop("Package 'ggplot2' is required for plotting. ",
          "Please install it with install.packages('ggplot2').",
          call. = FALSE)
   }
-
+  
   # ---------------------------------------------------------------------------
   # Setup
   # ---------------------------------------------------------------------------
-
+  
   # Default colors
   default_colors <- c(
     bias = "#2166AC",
     loa = "#B2182B",
     ci = "#DDDDDD"
   )
-
+  
   if (is.null(line_colors)) {
     line_colors <- default_colors
   } else {
@@ -111,24 +114,24 @@ plot.ba_analysis <- function(x,
     line_colors <- modifyList(as.list(default_colors), as.list(line_colors))
     line_colors <- unlist(line_colors)
   }
-
+  
   # Extract results
   res <- x$results
   settings <- x$settings
-
+  
   # Prepare plot data
   plot_data <- data.frame(
     average = res$averages,
     difference = res$differences
   )
-
+  
   # Labels
   if (is.null(xlab)) {
     xlab <- sprintf("Mean of %s and %s",
                     x$input$var_names["x"],
                     x$input$var_names["y"])
   }
-
+  
   if (is.null(ylab)) {
     if (settings$type == "absolute") {
       ylab <- sprintf("Difference (%s - %s)",
@@ -140,57 +143,53 @@ plot.ba_analysis <- function(x,
                       x$input$var_names["x"])
     }
   }
-
+  
   if (is.null(title)) {
     title <- "Bland-Altman Plot"
   }
-
+  
+  
   # CI level for annotation
   ci_pct <- paste0(settings$conf_level * 100, "%")
-
+  
   # ---------------------------------------------------------------------------
   # Build plot
   # ---------------------------------------------------------------------------
-
+  
   p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = .data$average,
-                                                y = .data$difference))
-
+                                               y = .data$difference))
+  
   # Add CI bands first (so they're behind everything)
+  # Use -Inf/Inf for full-width bands that extend across the entire plot
   if (show_ci) {
-    # X range for rectangles
-    x_range <- range(plot_data$average)
-    x_padding <- diff(x_range) * 0.05
-    x_min <- x_range[1] - x_padding
-    x_max <- x_range[2] + x_padding
-
     # CI band for bias
     p <- p +
       ggplot2::annotate(
         "rect",
-        xmin = x_min, xmax = x_max,
+        xmin = -Inf, xmax = Inf,
         ymin = res$bias_ci["lower"], ymax = res$bias_ci["upper"],
         fill = line_colors["ci"], alpha = 0.5
       )
-
+    
     # CI band for lower LoA
     p <- p +
       ggplot2::annotate(
         "rect",
-        xmin = x_min, xmax = x_max,
+        xmin = -Inf, xmax = Inf,
         ymin = res$loa_lower_ci["lower"], ymax = res$loa_lower_ci["upper"],
         fill = line_colors["ci"], alpha = 0.5
       )
-
+    
     # CI band for upper LoA
     p <- p +
       ggplot2::annotate(
         "rect",
-        xmin = x_min, xmax = x_max,
+        xmin = -Inf, xmax = Inf,
         ymin = res$loa_upper_ci["lower"], ymax = res$loa_upper_ci["upper"],
         fill = line_colors["ci"], alpha = 0.5
       )
   }
-
+  
   # Add horizontal lines for bias and LoA
   p <- p +
     # Bias line (solid)
@@ -220,7 +219,7 @@ plot.ba_analysis <- function(x,
       linetype = "dotted",
       linewidth = 0.5
     )
-
+  
   # Add points
   if (show_points) {
     p <- p +
@@ -230,11 +229,17 @@ plot.ba_analysis <- function(x,
         color = "black"
       )
   }
-
-  # Add annotations for bias and LoA values
-  # Position annotations at the right edge
-  x_annot <- max(plot_data$average) + diff(range(plot_data$average)) * 0.02
-
+  
+  # ---------------------------------------------------------------------------
+  # Annotations - positioned outside plot area with clipping disabled
+  
+  # ---------------------------------------------------------------------------
+  
+  # Calculate x position for annotations (right edge of data + margin)
+  x_range <- range(plot_data$average)
+  x_margin <- diff(x_range) * 0.02
+  x_annot <- x_range[2] + x_margin
+  
   p <- p +
     # Bias annotation
     ggplot2::annotate(
@@ -269,7 +274,7 @@ plot.ba_analysis <- function(x,
       size = 3,
       color = line_colors["loa"]
     )
-
+  
   # Labels and theme
   p <- p +
     ggplot2::labs(
@@ -283,14 +288,45 @@ plot.ba_analysis <- function(x,
       plot.title = ggplot2::element_text(face = "bold", size = 12),
       plot.subtitle = ggplot2::element_text(size = 10, color = "gray40"),
       axis.title = ggplot2::element_text(size = 10),
-      panel.grid.minor = ggplot2::element_blank()
+      panel.grid.minor = ggplot2::element_blank(),
+      # Add right margin to accommodate annotations
+      plot.margin = ggplot2::margin(5.5, 40, 5.5, 5.5, "pt")
     ) +
-    # Expand x-axis to make room for annotations
+    # Set axis limits with clipping disabled for annotations
     ggplot2::coord_cartesian(
-      xlim = c(min(plot_data$average) - diff(range(plot_data$average)) * 0.05,
-               max(plot_data$average) + diff(range(plot_data$average)) * 0.15),
+      xlim = c(x_range[1] - diff(x_range) * 0.05,
+               x_range[2] + diff(x_range) * 0.15),
       clip = "off"
     )
-
+  
   p
+}
+
+
+#' @rdname plot.ba_analysis
+#' @param object An object of class `ba_analysis`.
+#' @importFrom ggplot2 autoplot
+#' @export
+autoplot.ba_analysis <- function(object,
+                                 show_ci = TRUE,
+                                 show_points = TRUE,
+                                 point_alpha = 0.6,
+                                 point_size = 2,
+                                 line_colors = NULL,
+                                 title = NULL,
+                                 xlab = NULL,
+                                 ylab = NULL,
+                                 ...) {
+  plot.ba_analysis(
+    x = object,
+    show_ci = show_ci,
+    show_points = show_points,
+    point_alpha = point_alpha,
+    point_size = point_size,
+    line_colors = line_colors,
+    title = title,
+    xlab = xlab,
+    ylab = ylab,
+    ...
+  )
 }

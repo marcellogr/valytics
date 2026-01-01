@@ -79,7 +79,7 @@
 #' \itemize{
 #'   \item Differences are approximately normally distributed
 #'   \item No proportional bias (constant bias across the measurement range)
-#'   \item No repeated measurements (use [ba_analysis_repeated()] for that case)
+#'   \item No repeated measurements per subject
 #' }
 #'
 #' @references
@@ -93,8 +93,7 @@
 #'
 #' @seealso
 #' [plot.ba_analysis()] for visualization,
-#' [summary.ba_analysis()] for detailed summary,
-#' [pb_regression()] for Passing-Bablok regression
+#' [summary.ba_analysis()] for detailed summary
 #'
 #' @examples
 #' # Simulated method comparison data
@@ -120,56 +119,56 @@ ba_analysis <- function(x,
                         conf_level = 0.95,
                         type = c("absolute", "percent"),
                         na_action = c("omit", "fail")) {
-
-
+  
+  
   # Capture the call for reproducibility
-
+  
   call <- match.call()
-
-
+  
+  
   # Match arguments
-
+  
   type <- match.arg(type)
   na_action <- match.arg(na_action)
-
-
+  
+  
   # ---------------------------------------------------------------------------
-
+  
   # Input parsing: handle formula or vector interface
   # ---------------------------------------------------------------------------
   parsed <- .parse_ba_input(x, y, data)
   x_vals <- parsed$x
   y_vals <- parsed$y
   var_names <- parsed$var_names
-
-
+  
+  
   # ---------------------------------------------------------------------------
   # Input validation
-
+  
   # ---------------------------------------------------------------------------
-
+  
   .validate_ba_input(x_vals, y_vals, conf_level)
-
+  
   # ---------------------------------------------------------------------------
   # Handle missing values
   # ---------------------------------------------------------------------------
   complete_cases <- stats::complete.cases(x_vals, y_vals)
   n_excluded <- sum(!complete_cases)
-
-
+  
+  
   if (na_action == "fail" && n_excluded > 0) {
     stop("Missing values detected. Use `na_action = 'omit'` to remove them.",
          call. = FALSE)
   }
-
+  
   x_clean <- x_vals[complete_cases]
   y_clean <- y_vals[complete_cases]
   n <- length(x_clean)
-
+  
   if (n < 3) {
     stop("At least 3 complete paired observations are required.", call. = FALSE)
   }
-
+  
   # ---------------------------------------------------------------------------
   # Core calculations
   # ---------------------------------------------------------------------------
@@ -179,10 +178,10 @@ ba_analysis <- function(x,
     conf_level = conf_level,
     type = type
   )
-
+  
   # ---------------------------------------------------------------------------
   # Construct output object
-
+  
   # ---------------------------------------------------------------------------
   structure(
     list(
@@ -214,24 +213,24 @@ ba_analysis <- function(x,
 #' @noRd
 #' @keywords internal
 .parse_ba_input <- function(x, y, data) {
-
-
+  
+  
   # Formula interface: x ~ y
-
+  
   if (inherits(x, "formula")) {
     if (!is.null(y)) {
       warning("`y` is ignored when `x` is a formula.", call. = FALSE)
     }
-
+    
     # Extract variable names from formula
     formula_vars <- all.vars(x)
     if (length(formula_vars) != 2) {
       stop("Formula must have exactly two variables: method1 ~ method2",
            call. = FALSE)
     }
-
+    
     var_names <- c(x = formula_vars[1], y = formula_vars[2])
-
+    
     # Get data from environment or data frame
     if (is.null(data)) {
       env <- environment(x)
@@ -243,29 +242,29 @@ ba_analysis <- function(x,
       }
       x_vals <- data[[var_names["x"]]]
       y_vals <- data[[var_names["y"]]]
-
+      
       if (is.null(x_vals) || is.null(y_vals)) {
         stop("Variables specified in formula not found in `data`.",
              call. = FALSE)
       }
     }
-
+    
   } else {
     # Vector interface
     if (is.null(y)) {
       stop("Either provide a formula or both `x` and `y` vectors.",
            call. = FALSE)
     }
-
+    
     x_vals <- x
     y_vals <- y
-
-
+    
+    
     # Try to get variable names from call
     x_name <- deparse(substitute(x, env = parent.frame(2)))
     y_name <- deparse(substitute(y, env = parent.frame(2)))
     var_names <- c(x = x_name, y = y_name)
-
+    
     # If data is provided, extract from data frame
     if (!is.null(data)) {
       if (!is.data.frame(data)) {
@@ -281,7 +280,7 @@ ba_analysis <- function(x,
       }
     }
   }
-
+  
   list(x = x_vals, y = y_vals, var_names = var_names)
 }
 
@@ -290,33 +289,33 @@ ba_analysis <- function(x,
 #' @noRd
 #' @keywords internal
 .validate_ba_input <- function(x, y, conf_level) {
-
-
+  
+  
   # Check numeric
-
+  
   if (!is.numeric(x)) {
     stop("`x` must be a numeric vector.", call. = FALSE)
   }
   if (!is.numeric(y)) {
     stop("`y` must be a numeric vector.", call. = FALSE)
   }
-
-
+  
+  
   # Check equal length
-
+  
   if (length(x) != length(y)) {
     stop("`x` and `y` must have the same length.", call. = FALSE)
   }
-
-
+  
+  
   # Check confidence level
-
+  
   if (!is.numeric(conf_level) || length(conf_level) != 1 ||
       conf_level <= 0 || conf_level >= 1) {
     stop("`conf_level` must be a single number between 0 and 1.",
          call. = FALSE)
   }
-
+  
   invisible(TRUE)
 }
 
@@ -325,63 +324,63 @@ ba_analysis <- function(x,
 #' @noRd
 #' @keywords internal
 .compute_ba_statistics <- function(x, y, conf_level, type) {
-
+  
   n <- length(x)
-
+  
   # Calculate averages (always the same regardless of type)
   averages <- (x + y) / 2
-
-
+  
+  
   # Calculate differences based on type
-
+  
   if (type == "absolute") {
     differences <- y - x
   } else {
     # Percent difference: 100 * (y - x) / average
     differences <- 100 * (y - x) / averages
   }
-
+  
   # Bias (mean difference)
   bias <- mean(differences)
-
+  
   # Standard deviation of differences
   sd_diff <- stats::sd(differences)
-
+  
   # Standard error of bias
   bias_se <- sd_diff / sqrt(n)
-
+  
   # Multiplier for confidence intervals (e.g., 1.96 for 95%)
   z <- stats::qnorm(1 - (1 - conf_level) / 2)
-
+  
   # CI for bias (based on t-distribution)
   t_crit <- stats::qt(1 - (1 - conf_level) / 2, df = n - 1)
   bias_ci <- c(
     lower = bias - t_crit * bias_se,
     upper = bias + t_crit * bias_se
   )
-
-
+  
+  
   # Limits of agreement
   loa_lower <- bias - z * sd_diff
   loa_upper <- bias + z * sd_diff
-
+  
   # CI for limits of agreement (Bland & Altman 1999)
   # Variance of LoA = Var(mean) + z^2 * Var(SD)
-
+  
   # Var(SD) ≈ SD^2 / (2 * (n - 1)) for normal data
   # SE of LoA = SD * sqrt(1/n + z^2 / (2 * (n - 1)))
   se_loa <- sd_diff * sqrt(1/n + z^2 / (2 * (n - 1)))
-
+  
   loa_lower_ci <- c(
     lower = loa_lower - t_crit * se_loa,
     upper = loa_lower + t_crit * se_loa
   )
-
+  
   loa_upper_ci <- c(
     lower = loa_upper - t_crit * se_loa,
     upper = loa_upper + t_crit * se_loa
   )
-
+  
   list(
     differences = differences,
     averages = averages,

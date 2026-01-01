@@ -99,7 +99,7 @@ The standard Bland-Altman analysis assumes:
 \itemize{
 \item Differences are approximately normally distributed
 \item No proportional bias (constant bias across the measurement range)
-\item No repeated measurements (use \code{\link[=ba_analysis_repeated]{ba_analysis_repeated()}} for that case)
+\item No repeated measurements per subject
 }
 }
 
@@ -132,6 +132,5 @@ Bland JM, Altman DG (1999). Measuring agreement in method comparison studies.
 }
 \seealso{
 \code{\link[=plot.ba_analysis]{plot.ba_analysis()}} for visualization,
-\code{\link[=summary.ba_analysis]{summary.ba_analysis()}} for detailed summary,
-\code{\link[=pb_regression]{pb_regression()}} for Passing-Bablok regression
+\code{\link[=summary.ba_analysis]{summary.ba_analysis()}} for detailed summary
 }
