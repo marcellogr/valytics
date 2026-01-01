@@ -6,7 +6,15 @@
 \alias{valytics-package}
 \title{valytics: Statistical Methods for Analytical Method Comparison and Validation}
 \description{
-Statistical methods for analytical method comparison and validation studies. Implements approaches commonly used in clinical laboratory method validation.
+Statistical methods for analytical method comparison and validation studies. Implements Bland-Altman analysis and Passing-Bablok regression, approaches commonly used in clinical laboratory method validation following CLSI guidelines. Provides publication-ready plots and comprehensive statistical summaries.
+}
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/marcellogr/valytics}
+  \item Report bugs at \url{https://github.com/marcellogr/valytics/issues}
+}
+
 }
 \author{
 \strong{Maintainer}: Marcello Grassi \email{marcello.grassi@tum.de} (\href{https://orcid.org/0009-0008-8904-4988}{ORCID})
