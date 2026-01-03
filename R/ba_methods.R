@@ -39,8 +39,7 @@ print.ba_analysis <- function(x, digits = 3, ...) {
   # Results
   ci_pct <- format(x$settings$conf_level * 100, nsmall = 0)
 
-  cat("Results:\
-")
+  cat("Results:\n")
   cat(sprintf("  Bias (mean difference): %s\n",
               format(round(x$results$bias, digits), nsmall = digits)))
   cat(sprintf("    %s%% CI: [%s, %s]\n",

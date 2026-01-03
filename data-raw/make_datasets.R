@@ -1,18 +1,13 @@
-# =============================================================================
-# Data Generation Script for valytics Package
-# =============================================================================
+# Data Generation Script for valytics Package ----
 # This script generates synthetic but realistic datasets for method comparison
 # examples. The data mimics patterns seen in real clinical laboratory validation
 # studies without using actual patient data.
 #
 # Run this script to regenerate the .rda files in data/
-# =============================================================================
 
 set.seed(20240115)  # Reproducible generation
 
-# -----------------------------------------------------------------------------
-# Dataset 1: glucose_methods
-# -----------------------------------------------------------------------------
+# Dataset 1: glucose_methods ----
 # Context: Comparison of two glucose analyzers in a clinical laboratory.
 # Reference method: Established hexokinase-based analyzer (method_a)
 # New method: Point-of-care glucose meter (method_b)
@@ -38,7 +33,7 @@ true_glucose <- c(
 method_a <- true_glucose * rnorm(n_glucose, mean = 1.0, sd = 0.025)
 
 # POC method: higher CV, small constant + proportional bias
-method_b <- true_glucose * rnorm(n_glucose, mean = 1.02, sd = 0.045) + 
+method_b <- true_glucose * rnorm(n_glucose, mean = 1.02, sd = 0.045) +
             rnorm(n_glucose, mean = 3, sd = 1.5)
 
 # Round to realistic precision
@@ -57,9 +52,7 @@ glucose_methods <- glucose_methods[sample(n_glucose), ]
 row.names(glucose_methods) <- NULL
 
 
-# -----------------------------------------------------------------------------
-# Dataset 2: creatinine_serum
-# -----------------------------------------------------------------------------
+# Dataset 2: creatinine_serum ----
 # Context: Comparison of enzymatic vs Jaffe creatinine methods
 # This is a classic example where Jaffe method has known positive interference
 # from proteins and other substances.
@@ -87,7 +80,7 @@ enzymatic <- true_creat * rnorm(n_creat, mean = 1.0, sd = 0.03)
 # Jaffe method: positive interference, higher at low concentrations
 # Bias model: ~0.2 mg/dL constant + decreasing proportional effect
 jaffe_bias <- 0.15 + 0.08 * exp(-true_creat / 2)  # Decreasing bias at high values
-jaffe <- true_creat * rnorm(n_creat, mean = 1.0, sd = 0.04) + 
+jaffe <- true_creat * rnorm(n_creat, mean = 1.0, sd = 0.04) +
          jaffe_bias + rnorm(n_creat, mean = 0, sd = 0.05)
 
 # Add a few outliers (high bilirubin or hemolysis interference)
@@ -114,9 +107,7 @@ creatinine_serum <- creatinine_serum[sample(n_creat), ]
 row.names(creatinine_serum) <- NULL
 
 
-# -----------------------------------------------------------------------------
-# Dataset 3: troponin_cardiac
-# -----------------------------------------------------------------------------
+# Dataset 3: troponin_cardiac ----
 # Context: High-sensitivity cardiac troponin I assay comparison
 # Two different hs-cTnI platforms from different manufacturers
 #
@@ -169,9 +160,7 @@ troponin_cardiac <- troponin_cardiac[sample(n_trop), ]
 row.names(troponin_cardiac) <- NULL
 
 
-# -----------------------------------------------------------------------------
-# Save datasets
-# -----------------------------------------------------------------------------
+# Save datasets ----
 
 usethis::use_data(glucose_methods, overwrite = TRUE)
 usethis::use_data(creatinine_serum, overwrite = TRUE)

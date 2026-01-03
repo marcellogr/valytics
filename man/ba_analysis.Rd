@@ -83,7 +83,7 @@ outputs are:
 difference. A bias significantly different from zero suggests one method
 consistently measures higher or lower than the other.
 \item \strong{Limits of Agreement (LoA)}: The interval within which 95\\% of
-differences are expected to lie (bias ± 1.96 × SD). These define the
+differences are expected to lie (bias +/- 1.96 x SD). These define the
 range of disagreement between methods.
 \item \strong{Confidence Intervals}: CIs for bias and LoA quantify the
 uncertainty in these estimates due to sampling variability.

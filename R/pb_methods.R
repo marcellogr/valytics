@@ -20,17 +20,17 @@
 #' @seealso [summary.pb_regression()] for detailed output
 #' @export
 print.pb_regression <- function(x, digits = 3, ...) {
-  
+
   cat("\nPassing-Bablok Regression\n")
   cat(strrep("-", 40), "\n")
-  
+
   # Sample size
   cat(sprintf("n = %d paired observations", x$input$n))
   if (x$input$n_excluded > 0) {
     cat(sprintf(" (%d excluded)", x$input$n_excluded))
   }
   cat("\n\n")
-  
+
   # CI method and level
   ci_pct <- paste0(x$settings$conf_level * 100, "%")
   ci_method_str <- if (x$settings$ci_method == "analytical") {
@@ -40,7 +40,7 @@ print.pb_regression <- function(x, digits = 3, ...) {
   }
   cat(sprintf("CI method: %s\n", ci_method_str))
   cat(sprintf("Confidence level: %s\n\n", ci_pct))
-  
+
   # Regression equation
   cat("Regression equation:\n")
   cat(sprintf("  %s = %.3f + %.3f * %s\n\n",
@@ -48,17 +48,17 @@ print.pb_regression <- function(x, digits = 3, ...) {
               x$results$intercept,
               x$results$slope,
               x$input$var_names["x"]))
-  
+
   # Results
   cat("Results:\n")
-  
+
   # Intercept
   cat(sprintf("  Intercept: %.*f\n", digits, x$results$intercept))
   if (!any(is.na(x$results$intercept_ci))) {
     cat(sprintf("    %s CI: [%.*f, %.*f]\n",
                 ci_pct, digits, x$results$intercept_ci["lower"],
                 digits, x$results$intercept_ci["upper"]))
-    
+
     # Check if 0 is in CI
     if (x$results$intercept_ci["lower"] <= 0 &&
         x$results$intercept_ci["upper"] >= 0) {
@@ -67,16 +67,16 @@ print.pb_regression <- function(x, digits = 3, ...) {
       cat("    (excludes 0: significant constant bias)\n")
     }
   }
-  
+
   cat("\n")
-  
+
   # Slope
   cat(sprintf("  Slope: %.*f\n", digits, x$results$slope))
   if (!any(is.na(x$results$slope_ci))) {
     cat(sprintf("    %s CI: [%.*f, %.*f]\n",
                 ci_pct, digits, x$results$slope_ci["lower"],
                 digits, x$results$slope_ci["upper"]))
-    
+
     # Check if 1 is in CI
     if (x$results$slope_ci["lower"] <= 1 &&
         x$results$slope_ci["upper"] >= 1) {
@@ -85,9 +85,9 @@ print.pb_regression <- function(x, digits = 3, ...) {
       cat("    (excludes 1: significant proportional bias)\n")
     }
   }
-  
+
   cat("\n")
-  
+
   invisible(x)
 }
 
@@ -123,17 +123,15 @@ print.pb_regression <- function(x, digits = 3, ...) {
 #' @seealso [print.pb_regression()] for concise output
 #' @export
 summary.pb_regression <- function(object, ...) {
-  
+
   x <- object
   ci_pct <- paste0(x$settings$conf_level * 100, "%")
-  
+
   cat("\n")
   cat("Passing-Bablok Regression - Detailed Summary\n")
   cat(strrep("=", 50), "\n\n")
-  
-  # ---------------------------------------------------------------------------
-  # Input summary
-  # ---------------------------------------------------------------------------
+
+  # Input summary ----
   cat("Data:\n")
   cat(sprintf("  X variable: %s\n", x$input$var_names["x"]))
   cat(sprintf("  Y variable: %s\n", x$input$var_names["y"]))
@@ -142,10 +140,8 @@ summary.pb_regression <- function(object, ...) {
     cat(sprintf("  Excluded (NA): %d\n", x$input$n_excluded))
   }
   cat("\n")
-  
-  # ---------------------------------------------------------------------------
-  # Settings
-  # ---------------------------------------------------------------------------
+
+  # Settings ----
   cat("Settings:\n")
   cat(sprintf("  Confidence level: %s\n", ci_pct))
   ci_method_str <- if (x$settings$ci_method == "analytical") {
@@ -155,13 +151,11 @@ summary.pb_regression <- function(object, ...) {
   }
   cat(sprintf("  CI method: %s\n", ci_method_str))
   cat("\n")
-  
-  # ---------------------------------------------------------------------------
-  # Regression coefficients
-  # ---------------------------------------------------------------------------
+
+  # Regression coefficients ----
   cat("Regression Coefficients:\n")
   cat(strrep("-", 50), "\n")
-  
+
   # Create coefficient table
   coef_table <- data.frame(
     Estimate = c(x$results$intercept, x$results$slope),
@@ -171,10 +165,10 @@ summary.pb_regression <- function(object, ...) {
   )
   names(coef_table) <- c("Estimate", paste0(ci_pct, " Lower"),
                          paste0(ci_pct, " Upper"))
-  
+
   print(round(coef_table, 4))
   cat("\n")
-  
+
   # Regression equation
   cat("Regression equation:\n")
   cat(sprintf("  %s = %.4f + %.4f * %s\n\n",
@@ -182,18 +176,16 @@ summary.pb_regression <- function(object, ...) {
               x$results$intercept,
               x$results$slope,
               x$input$var_names["x"]))
-  
-  # ---------------------------------------------------------------------------
-  # CUSUM linearity test
-  # ---------------------------------------------------------------------------
+
+  # CUSUM linearity test ----
   cat("Linearity Test (CUSUM):\n")
   cat(strrep("-", 50), "\n")
-  
+
   if (!is.na(x$cusum$statistic)) {
     cat(sprintf("  Test statistic: %.4f\n", x$cusum$statistic))
     cat(sprintf("  Critical value (alpha = 0.05): %.2f\n", x$cusum$critical_value))
     cat(sprintf("  p-value: %.4f\n", x$cusum$p_value))
-    
+
     if (x$cusum$linear) {
       cat("  Result: Linearity assumption is satisfied (p >= 0.05)\n")
     } else {
@@ -204,18 +196,16 @@ summary.pb_regression <- function(object, ...) {
     cat("  Could not compute CUSUM test.\n")
   }
   cat("\n")
-  
-  # ---------------------------------------------------------------------------
-  # Interpretation
-  # ---------------------------------------------------------------------------
+
+  # Interpretation ----
   cat("Interpretation:\n")
   cat(strrep("-", 50), "\n")
-  
+
   # Intercept interpretation
   intercept_in_ci <- !any(is.na(x$results$intercept_ci)) &&
     x$results$intercept_ci["lower"] <= 0 &&
     x$results$intercept_ci["upper"] >= 0
-  
+
   if (is.na(x$results$intercept_ci["lower"])) {
     cat("  Intercept: CI not available\n")
   } else if (intercept_in_ci) {
@@ -229,12 +219,12 @@ summary.pb_regression <- function(object, ...) {
     cat(sprintf("    -> Significant %s constant bias of %.3f\n",
                 direction, x$results$intercept))
   }
-  
+
   # Slope interpretation
   slope_in_ci <- !any(is.na(x$results$slope_ci)) &&
     x$results$slope_ci["lower"] <= 1 &&
     x$results$slope_ci["upper"] >= 1
-  
+
   if (is.na(x$results$slope_ci["lower"])) {
     cat("  Slope: CI not available\n")
   } else if (slope_in_ci) {
@@ -247,23 +237,21 @@ summary.pb_regression <- function(object, ...) {
                 x$results$slope_ci["upper"]))
     cat(sprintf("    -> Significant proportional bias of %.1f%%\n", pct_diff))
   }
-  
+
   cat("\n")
-  
-  # ---------------------------------------------------------------------------
-  # Overall conclusion
-  # ---------------------------------------------------------------------------
+
+  # Overall conclusion ----
   cat("Conclusion:\n")
   cat(strrep("-", 50), "\n")
-  
+
   linearity_ok <- is.na(x$cusum$linear) || x$cusum$linear
-  
+
   if (intercept_in_ci && slope_in_ci && linearity_ok) {
     cat("  The two methods are EQUIVALENT within the measured range.\n")
     cat("  No systematic differences detected.\n")
   } else {
     cat("  The two methods show SYSTEMATIC DIFFERENCES:\n")
-    
+
     if (!linearity_ok) {
       cat("    - Linearity assumption violated\n")
     }
@@ -278,16 +266,14 @@ summary.pb_regression <- function(object, ...) {
     }
   }
   cat("\n")
-  
-  # ---------------------------------------------------------------------------
-  # Residual summary
-  # ---------------------------------------------------------------------------
+
+  # Residual summary ----
   cat("Residuals (perpendicular):\n")
   cat(strrep("-", 50), "\n")
   resid_summary <- summary(x$results$residuals)
   print(resid_summary)
   cat("\n")
-  
+
   # Return summary statistics invisibly
   invisible(list(
     coefficients = coef_table,

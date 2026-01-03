@@ -94,17 +94,17 @@ plot.pb_regression <- function(x,
                                xlab = NULL,
                                ylab = NULL,
                                ...) {
-  
+
   # Check ggplot2 availability
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
     stop("Package 'ggplot2' is required for plotting. ",
          "Please install it with install.packages('ggplot2').",
          call. = FALSE)
   }
-  
+
   type <- match.arg(type)
   residual_type <- match.arg(residual_type)
-  
+
   # Default colors
   default_colors <- c(
     regression = "#2166AC",
@@ -112,14 +112,14 @@ plot.pb_regression <- function(x,
     ci = "#B2182B",
     zero = "#999999"
   )
-  
+
   if (is.null(line_colors)) {
     line_colors <- default_colors
   } else {
     line_colors <- modifyList(as.list(default_colors), as.list(line_colors))
     line_colors <- unlist(line_colors)
   }
-  
+
   # Dispatch to appropriate plot function
   switch(type,
          scatter = .plot_pb_scatter(x, show_ci, show_identity, point_alpha,
@@ -132,41 +132,43 @@ plot.pb_regression <- function(x,
 }
 
 
+# Plot Helper Functions ----
+
 #' Scatter plot for Passing-Bablok regression
 #' @noRd
 .plot_pb_scatter <- function(x, show_ci, show_identity, point_alpha,
                              point_size, line_colors, title, xlab, ylab) {
-  
+
   # Extract data
   res <- x$results
   input <- x$input
   settings <- x$settings
-  
+
   # Prepare plot data
   plot_data <- data.frame(
     x = input$x,
     y = input$y
   )
-  
+
   # Axis labels
   if (is.null(xlab)) xlab <- input$var_names["x"]
   if (is.null(ylab)) ylab <- input$var_names["y"]
-  
+
   if (is.null(title)) {
     title <- "Passing-Bablok Regression"
   }
-  
+
   ci_pct <- paste0(settings$conf_level * 100, "%")
-  
+
   # Build plot
   p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = .data$x, y = .data$y))
-  
+
   # Add CI band for regression line
   if (show_ci && !any(is.na(res$slope_ci)) && !any(is.na(res$intercept_ci))) {
     # Create prediction band
     x_range <- range(input$x)
     x_seq <- seq(x_range[1], x_range[2], length.out = 100)
-    
+
     # Upper and lower bounds using CI extremes
     # Conservative approach: use combinations that give widest band
     y_upper <- pmax(
@@ -179,9 +181,9 @@ plot.pb_regression <- function(x,
       res$intercept_ci["lower"] + res$slope_ci["upper"] * x_seq,
       res$intercept_ci["upper"] + res$slope_ci["lower"] * x_seq
     )
-    
+
     ci_data <- data.frame(x = x_seq, y_lower = y_lower, y_upper = y_upper)
-    
+
     p <- p +
       ggplot2::geom_ribbon(
         data = ci_data,
@@ -191,7 +193,7 @@ plot.pb_regression <- function(x,
         inherit.aes = FALSE
       )
   }
-  
+
   # Add identity line (y = x)
   if (show_identity) {
     p <- p +
@@ -202,7 +204,7 @@ plot.pb_regression <- function(x,
         linewidth = 0.7
       )
   }
-  
+
   # Add regression line
   p <- p +
     ggplot2::geom_abline(
@@ -210,7 +212,7 @@ plot.pb_regression <- function(x,
       color = line_colors["regression"],
       linewidth = 1
     )
-  
+
   # Add points
   p <- p +
     ggplot2::geom_point(
@@ -218,10 +220,10 @@ plot.pb_regression <- function(x,
       size = point_size,
       color = "black"
     )
-  
+
   # Create equation label
   eq_label <- sprintf("y = %.3f + %.3f x", res$intercept, res$slope)
-  
+
   # Add labels and theme
   p <- p +
     ggplot2::labs(
@@ -242,7 +244,7 @@ plot.pb_regression <- function(x,
       panel.grid.minor = ggplot2::element_blank(),
       aspect.ratio = 1
     )
-  
+
   p
 }
 
@@ -251,11 +253,11 @@ plot.pb_regression <- function(x,
 #' @noRd
 .plot_pb_residuals <- function(x, residual_type, point_alpha,
                                point_size, line_colors, title, xlab, ylab) {
-  
+
   # Extract data
   res <- x$results
   input <- x$input
-  
+
   # Prepare plot data based on residual type
   if (residual_type == "fitted") {
     plot_data <- data.frame(
@@ -272,14 +274,14 @@ plot.pb_regression <- function(x,
     )
     if (is.null(xlab)) xlab <- "Rank (ordered by X)"
   }
-  
+
   if (is.null(ylab)) ylab <- "Perpendicular residual"
   if (is.null(title)) title <- "Passing-Bablok Residuals"
-  
+
   # Build plot
   p <- ggplot2::ggplot(plot_data,
                        ggplot2::aes(x = .data$x_val, y = .data$residual))
-  
+
   # Add zero reference line
   p <- p +
     ggplot2::geom_hline(
@@ -288,7 +290,7 @@ plot.pb_regression <- function(x,
       linetype = "dashed",
       linewidth = 0.7
     )
-  
+
   # Add points
   p <- p +
     ggplot2::geom_point(
@@ -296,7 +298,7 @@ plot.pb_regression <- function(x,
       size = point_size,
       color = "black"
     )
-  
+
   # Add smooth line to detect trends (optional, using loess)
   if (nrow(plot_data) >= 10) {
     p <- p +
@@ -309,7 +311,7 @@ plot.pb_regression <- function(x,
         alpha = 0.7
       )
   }
-  
+
   # Labels and theme
   p <- p +
     ggplot2::labs(
@@ -325,7 +327,7 @@ plot.pb_regression <- function(x,
       axis.title = ggplot2::element_text(size = 10),
       panel.grid.minor = ggplot2::element_blank()
     )
-  
+
   p
 }
 
@@ -333,56 +335,56 @@ plot.pb_regression <- function(x,
 #' CUSUM plot for Passing-Bablok regression
 #' @noRd
 .plot_pb_cusum <- function(x, line_colors, title, xlab, ylab) {
-  
+
   # Extract data
   input <- x$input
   res <- x$results
   cusum_res <- x$cusum
-  
+
   n <- input$n
-  
+
   # Recalculate CUSUM values for plotting
   fitted_y <- res$intercept + res$slope * input$x
   residuals <- input$y - fitted_y
-  
+
   n_pos <- sum(residuals > 0)
   n_neg <- sum(residuals < 0)
-  
+
   if (n_pos == 0 || n_neg == 0) {
     stop("Cannot create CUSUM plot: all residuals have the same sign.",
          call. = FALSE)
   }
-  
+
   score_pos <- sqrt(n_neg / n_pos)
   score_neg <- -sqrt(n_pos / n_neg)
-  
+
   scores <- ifelse(residuals > 0, score_pos,
                    ifelse(residuals < 0, score_neg, 0))
-  
+
   # Sort by x values
   ord <- order(input$x)
   scores_sorted <- scores[ord]
-  
+
   # Calculate cumulative sums
   cusum <- cumsum(scores_sorted)
-  
+
   # Critical bounds (approximate, based on K-S distribution)
   # At alpha = 0.05, critical value is 1.36
   critical <- 1.36 * sqrt(n)
-  
+
   # Prepare plot data
   plot_data <- data.frame(
     rank = seq_along(cusum),
     cusum = cusum
   )
-  
+
   if (is.null(title)) title <- "CUSUM Linearity Test"
   if (is.null(xlab)) xlab <- "Rank (ordered by X)"
   if (is.null(ylab)) ylab <- "Cumulative sum"
-  
+
   # Build plot
   p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = .data$rank, y = .data$cusum))
-  
+
   # Add critical bounds
   p <- p +
     ggplot2::geom_hline(
@@ -397,7 +399,7 @@ plot.pb_regression <- function(x,
       linetype = "dotted",
       linewidth = 0.5
     )
-  
+
   # Add CUSUM line and points
   p <- p +
     ggplot2::geom_line(
@@ -409,7 +411,7 @@ plot.pb_regression <- function(x,
       size = 1.5,
       alpha = 0.7
     )
-  
+
   # Add annotation for test result
   result_text <- if (!is.na(cusum_res$linear) && cusum_res$linear) {
     sprintf("Linearity OK (H = %.3f, p = %.3f)", cusum_res$statistic, cusum_res$p_value)
@@ -418,7 +420,7 @@ plot.pb_regression <- function(x,
   } else {
     "Test not available"
   }
-  
+
   # Labels and theme
   p <- p +
     ggplot2::labs(
@@ -436,7 +438,7 @@ plot.pb_regression <- function(x,
       axis.title = ggplot2::element_text(size = 10),
       panel.grid.minor = ggplot2::element_blank()
     )
-  
+
   p
 }
 

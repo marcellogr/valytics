@@ -73,7 +73,7 @@ The Bland-Altman plot displays:
 \item \strong{Points}: Each point represents a paired observation, plotted as
 the difference (y - x) against the average ((x + y) / 2).
 \item \strong{Bias line}: Solid horizontal line at the mean difference.
-\item \strong{Limits of agreement}: Dashed horizontal lines at bias ± 1.96 × SD.
+\item \strong{Limits of agreement}: Dashed horizontal lines at bias +/- 1.96 x SD.
 \item \strong{Confidence intervals}: Shaded bands showing the uncertainty in
 the bias and LoA estimates.
 }

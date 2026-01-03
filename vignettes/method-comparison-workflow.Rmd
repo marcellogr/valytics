@@ -1,6 +1,6 @@
 ---
 title: "Method Comparison Workflow"
-author: "Marcello"
+author: "Marcello Grassi"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Method Comparison Workflow}

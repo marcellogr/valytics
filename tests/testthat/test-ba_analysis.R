@@ -1,5 +1,4 @@
-# Tests for ba_analysis()
-# =============================================================================
+# Tests for ba_analysis() ----
 
 test_that("ba_analysis works with basic vector input", {
   set.seed(123)

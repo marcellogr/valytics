@@ -29,7 +29,7 @@
 #'   \item **Points**: Each point represents a paired observation, plotted as
 #'     the difference (y - x) against the average ((x + y) / 2).
 #'   \item **Bias line**: Solid horizontal line at the mean difference.
-#'   \item **Limits of agreement**: Dashed horizontal lines at bias ± 1.96 × SD.
+#'   \item **Limits of agreement**: Dashed horizontal lines at bias +/- 1.96 x SD.
 #'   \item **Confidence intervals**: Shaded bands showing the uncertainty in
 #'     the bias and LoA estimates.
 #' }
@@ -87,26 +87,23 @@ plot.ba_analysis <- function(x,
                              xlab = NULL,
                              ylab = NULL,
                              ...) {
-  
-  
+
   # Check ggplot2 availability
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
     stop("Package 'ggplot2' is required for plotting. ",
          "Please install it with install.packages('ggplot2').",
          call. = FALSE)
   }
-  
-  # ---------------------------------------------------------------------------
-  # Setup
-  # ---------------------------------------------------------------------------
-  
+
+  # Setup ----
+
   # Default colors
   default_colors <- c(
     bias = "#2166AC",
     loa = "#B2182B",
     ci = "#DDDDDD"
   )
-  
+
   if (is.null(line_colors)) {
     line_colors <- default_colors
   } else {
@@ -114,24 +111,24 @@ plot.ba_analysis <- function(x,
     line_colors <- modifyList(as.list(default_colors), as.list(line_colors))
     line_colors <- unlist(line_colors)
   }
-  
+
   # Extract results
   res <- x$results
   settings <- x$settings
-  
+
   # Prepare plot data
   plot_data <- data.frame(
     average = res$averages,
     difference = res$differences
   )
-  
+
   # Labels
   if (is.null(xlab)) {
     xlab <- sprintf("Mean of %s and %s",
                     x$input$var_names["x"],
                     x$input$var_names["y"])
   }
-  
+
   if (is.null(ylab)) {
     if (settings$type == "absolute") {
       ylab <- sprintf("Difference (%s - %s)",
@@ -143,22 +140,19 @@ plot.ba_analysis <- function(x,
                       x$input$var_names["x"])
     }
   }
-  
+
   if (is.null(title)) {
     title <- "Bland-Altman Plot"
   }
-  
-  
+
   # CI level for annotation
   ci_pct <- paste0(settings$conf_level * 100, "%")
-  
-  # ---------------------------------------------------------------------------
-  # Build plot
-  # ---------------------------------------------------------------------------
-  
+
+  # Build plot ----
+
   p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = .data$average,
                                                y = .data$difference))
-  
+
   # Add CI bands first (so they're behind everything)
   # Use -Inf/Inf for full-width bands that extend across the entire plot
   if (show_ci) {
@@ -170,7 +164,7 @@ plot.ba_analysis <- function(x,
         ymin = res$bias_ci["lower"], ymax = res$bias_ci["upper"],
         fill = line_colors["ci"], alpha = 0.5
       )
-    
+
     # CI band for lower LoA
     p <- p +
       ggplot2::annotate(
@@ -179,7 +173,7 @@ plot.ba_analysis <- function(x,
         ymin = res$loa_lower_ci["lower"], ymax = res$loa_lower_ci["upper"],
         fill = line_colors["ci"], alpha = 0.5
       )
-    
+
     # CI band for upper LoA
     p <- p +
       ggplot2::annotate(
@@ -189,7 +183,7 @@ plot.ba_analysis <- function(x,
         fill = line_colors["ci"], alpha = 0.5
       )
   }
-  
+
   # Add horizontal lines for bias and LoA
   p <- p +
     # Bias line (solid)
@@ -219,7 +213,7 @@ plot.ba_analysis <- function(x,
       linetype = "dotted",
       linewidth = 0.5
     )
-  
+
   # Add points
   if (show_points) {
     p <- p +
@@ -229,17 +223,14 @@ plot.ba_analysis <- function(x,
         color = "black"
       )
   }
-  
-  # ---------------------------------------------------------------------------
-  # Annotations - positioned outside plot area with clipping disabled
-  
-  # ---------------------------------------------------------------------------
-  
+
+  # Annotations ----
+
   # Calculate x position for annotations (right edge of data + margin)
   x_range <- range(plot_data$average)
   x_margin <- diff(x_range) * 0.02
   x_annot <- x_range[2] + x_margin
-  
+
   p <- p +
     # Bias annotation
     ggplot2::annotate(
@@ -274,7 +265,7 @@ plot.ba_analysis <- function(x,
       size = 3,
       color = line_colors["loa"]
     )
-  
+
   # Labels and theme
   p <- p +
     ggplot2::labs(
@@ -298,7 +289,7 @@ plot.ba_analysis <- function(x,
                x_range[2] + diff(x_range) * 0.15),
       clip = "off"
     )
-  
+
   p
 }
 

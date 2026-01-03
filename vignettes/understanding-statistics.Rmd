@@ -1,0 +1,284 @@
+---
+title: "Understanding Method Comparison Statistics"
+author: "Marcello Grassi"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Understanding Method Comparison Statistics}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 6,
+  fig.height = 4,
+  fig.align = "center"
+)
+```
+
+## Introduction
+
+This vignette provides a conceptual overview of the statistical methods implemented in `valytics`. The goal is to help you understand *what* the numbers mean and *how* to think about them, not to prescribe specific acceptance criteria or make decisions for you.
+
+Whether your analysis "passes" or "fails" depends entirely on your specific application, regulatory requirements, and clinical context. This package provides the tools; you and your organization define what constitutes acceptable agreement.
+
+```{r load}
+library(valytics)
+library(ggplot2)
+```
+
+## Statistical Concepts in Bland-Altman Analysis
+
+### What is Bias?
+
+The **bias** (mean difference) quantifies the average systematic offset between two methods. It answers: "On average, how much higher or lower does method Y read compared to method X?"
+
+```{r ba-example}
+data("creatinine_serum")
+ba <- ba_analysis(
+  x = creatinine_serum$enzymatic,
+  y = creatinine_serum$jaffe
+)
+```
+
+```{r bias-output}
+cat("Bias:", round(ba$results$bias, 3), "mg/dL\n")
+cat("95% CI:", round(ba$results$bias_ci["lower"], 3), "to",
+    round(ba$results$bias_ci["upper"], 3), "\n")
+```
+
+**What this tells you:**
+
+- The point estimate indicates the direction and magnitude of systematic difference
+- The confidence interval quantifies uncertainty due to sampling variability
+- If the CI excludes zero, the bias is statistically distinguishable from zero at that confidence level
+
+**What this does NOT tell you:**
+
+- Whether the bias is clinically important (that depends on your application)
+- Whether the methods are "equivalent" (you must define what that means)
+- Whether you should use one method over another
+
+### What are Limits of Agreement?
+
+The **limits of agreement (LoA)** define an interval expected to contain 95% of the differences between methods. They answer: "For a randomly selected sample, how much could the two methods disagree?"
+
+```{r loa-output}
+cat("Lower LoA:", round(ba$results$loa_lower, 3), "\n")
+cat("Upper LoA:", round(ba$results$loa_upper, 3), "\n")
+cat("Width:", round(ba$results$loa_upper - ba$results$loa_lower, 3), "\n")
+```
+
+The LoA represent the *range* of disagreement you can expect in practice. A narrow LoA indicates consistent agreement; a wide LoA indicates variable differences.
+
+**Key insight:** The LoA are often more informative than the bias alone. Two methods might have negligible average bias but wide limits of agreement, meaning individual measurements could differ substantially.
+
+### Visualizing Agreement
+
+The Bland-Altman plot provides a visual assessment:
+
+```{r ba-plot, fig.cap = "Bland-Altman plot showing differences vs. averages."}
+plot(ba)
+```
+
+**What to look for:**
+
+- **Random scatter around the bias line**: Suggests constant bias across the measurement range
+- **Funnel shape**: Variance changes with magnitude (heteroscedasticity)
+- **Systematic trend**: Proportional bias (differences depend on concentration)
+- **Points outside LoA**: Expected for ~5% of observations if assumptions hold
+
+### Checking Assumptions
+
+Bland-Altman analysis assumes normally distributed differences. The summary provides a Shapiro-Wilk test:
+
+```{r normality}
+summ <- summary(ba)
+if (!is.null(summ$normality_test)) {
+  cat("Shapiro-Wilk p-value:", round(summ$normality_test$p.value, 4), "\n")
+}
+```
+
+A low p-value suggests non-normality. Consider:
+
+- Examining the distribution visually
+- Using percentage differences if variance increases with magnitude
+- Applying transformations for skewed data
+
+```{r histogram, fig.cap = "Distribution of differences."}
+ggplot(data.frame(diff = ba$results$differences), aes(x = diff)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 15,
+                 fill = "steelblue", alpha = 0.7) +
+  geom_density(linewidth = 1) +
+  labs(x = "Difference (Jaffe - Enzymatic)", y = "Density") +
+  theme_minimal()
+```
+
+## Statistical Concepts in Passing-Bablok Regression
+
+### Slope and Intercept
+
+Passing-Bablok regression fits a line: `Y = intercept + slope * X`
+
+The parameters have direct interpretations:
+
+- **Slope = 1**: No proportional (multiplicative) difference
+- **Intercept = 0**: No constant (additive) difference
+
+```{r pb-example}
+pb <- pb_regression(
+  x = creatinine_serum$enzymatic,
+  y = creatinine_serum$jaffe
+)
+```
+
+```{r pb-output}
+cat("Slope:", round(pb$results$slope, 4), "\n")
+cat("  95% CI:", round(pb$results$slope_ci["lower"], 4), "to",
+    round(pb$results$slope_ci["upper"], 4), "\n")
+cat("Intercept:", round(pb$results$intercept, 4), "\n")
+cat("  95% CI:", round(pb$results$intercept_ci["lower"], 4), "to",
+    round(pb$results$intercept_ci["upper"], 4), "\n")
+```
+
+**How to read the confidence intervals:**
+
+- If the slope CI **includes 1**: Cannot conclude proportional bias exists
+- If the slope CI **excludes 1**: Evidence of proportional bias
+- If the intercept CI **includes 0**: Cannot conclude constant bias exists
+- If the intercept CI **excludes 0**: Evidence of constant bias
+
+### Translating to Practical Differences
+
+You can use the regression equation to estimate expected differences at specific concentrations:
+
+```{r translation}
+# At various concentrations, what's the expected difference?
+concentrations <- c(0.8, 1.3, 3.0, 6.0)
+
+for (conc in concentrations) {
+  expected_y <- pb$results$intercept + pb$results$slope * conc
+  difference <- expected_y - conc
+  cat(sprintf("At X = %.1f: expected Y = %.3f, difference = %.3f\n",
+              conc, expected_y, difference))
+}
+```
+
+This helps translate abstract regression parameters into concrete, application-specific terms.
+
+### Linearity Assessment
+
+The CUSUM test evaluates whether a linear model is appropriate:
+
+```{r cusum}
+cat("CUSUM statistic:", round(pb$cusum$statistic, 4), "\n")
+cat("p-value:", round(pb$cusum$p_value, 4), "\n")
+```
+
+A significant result (conventionally p < 0.05) suggests the relationship may not be linear across the measurement range. If non-linearity is detected:
+
+- Consider whether it's clinically meaningful
+- Examine specific concentration ranges
+- Evaluate whether a single regression is appropriate
+
+```{r cusum-plot, fig.cap = "CUSUM plot for linearity assessment."}
+plot(pb, type = "cusum")
+```
+
+## Common Analysis Considerations
+
+### Correlation is Not Agreement
+
+High correlation between methods is often reported but can be misleading:
+
+```{r correlation}
+r <- cor(creatinine_serum$enzymatic, creatinine_serum$jaffe)
+cat("Correlation coefficient:", round(r, 4), "\n")
+```
+
+Correlation measures whether methods *rank* samples similarly, not whether they give the *same values*. Two methods with r = 1 but different calibrations would show systematic bias that correlation fails to detect.
+
+### Sample Characteristics Matter
+
+Your results depend on:
+
+- **Concentration range**: Bias may differ at low vs. high concentrations
+- **Sample types**: Matrix effects can vary
+- **Population**: Results from one patient group may not generalize
+
+Be cautious about extrapolating beyond the conditions of your study.
+
+### Statistical vs. Practical Significance
+
+A statistically significant bias (CI excludes zero) may or may not be practically important. Consider:
+
+```{r context}
+# Example: Is a bias of X clinically meaningful?
+# This depends entirely on YOUR application
+bias_value <- ba$results$bias
+
+cat("Observed bias:", round(bias_value, 3), "mg/dL\n")
+cat("\nWhether this is 'acceptable' depends on:\n")
+cat("- Your specific clinical decision thresholds\n")
+cat("- Regulatory requirements for your application\n")
+cat("- Intended use of the measurement\n")
+cat("- Established performance goals (CLIA, biological variation, etc.)\n")
+```
+
+## Creating Analysis Reports
+
+Here's how to extract key statistics for reporting:
+
+```{r report}
+# Bland-Altman summary
+cat("=== Bland-Altman Analysis ===\n")
+cat(sprintf("n = %d\n", ba$input$n))
+cat(sprintf("Bias: %.3f (95%% CI: %.3f to %.3f)\n",
+            ba$results$bias,
+            ba$results$bias_ci["lower"],
+            ba$results$bias_ci["upper"]))
+cat(sprintf("SD of differences: %.3f\n", ba$results$sd_diff))
+cat(sprintf("LoA: %.3f to %.3f\n\n",
+            ba$results$loa_lower,
+            ba$results$loa_upper))
+
+# Passing-Bablok summary
+cat("=== Passing-Bablok Regression ===\n")
+cat(sprintf("Slope: %.4f (95%% CI: %.4f to %.4f)\n",
+            pb$results$slope,
+            pb$results$slope_ci["lower"],
+            pb$results$slope_ci["upper"]))
+cat(sprintf("Intercept: %.4f (95%% CI: %.4f to %.4f)\n",
+            pb$results$intercept,
+            pb$results$intercept_ci["lower"],
+            pb$results$intercept_ci["upper"]))
+cat(sprintf("CUSUM p-value: %.4f\n", pb$cusum$p_value))
+```
+
+## Summary
+
+The `valytics` package provides statistical tools for method comparison. It calculates:
+
+- **Bland-Altman**: Bias, limits of agreement, and their confidence intervals
+- **Passing-Bablok**: Slope, intercept, and linearity assessment
+
+These statistics describe the *relationship* between methods. Whether that relationship is "acceptable" for your purpose is a separate question that depends on:
+
+- Clinical decision thresholds
+- Regulatory requirements
+- Performance specifications (biological variation, CLIA, etc.)
+- Intended use
+
+The package reports what the data show. You decide what it means for your application.
+
+## References
+
+Bland JM, Altman DG. Statistical methods for assessing agreement between two methods of clinical measurement. Lancet. 1986;1(8476):307-310.
+
+Bland JM, Altman DG. Measuring agreement in method comparison studies. Statistical Methods in Medical Research. 1999;8(2):135-160.
+
+Passing H, Bablok W. A new biometrical procedure for testing the equality of measurements from two different analytical methods. Journal of Clinical Chemistry and Clinical Biochemistry. 1983;21(11):709-720.
+
+Westgard JO, Hunt MR. Use and interpretation of common statistical tests in method-comparison studies. Clinical Chemistry. 1973;19(1):49-57.
