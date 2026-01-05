@@ -1,32 +1,38 @@
 # valytics 0.1.0
 
 Initial CRAN release.
+ 
+## New features
 
-## Features
+* `ba_analysis()`: Bland-Altman method comparison analysis with bias estimation, 
+  limits of agreement, and confidence intervals. Supports both absolute and 
 
-### Bland-Altman Analysis
-* `ba_analysis()`: Bland-Altman analysis for method comparison
-  - Vector and formula interfaces
-  - Absolute and percent difference types
-  - Confidence intervals for bias and limits of agreement (Bland & Altman 1999)
-  - `print()`, `summary()`, and `plot()` methods
-  - `autoplot()` method for ggplot2-style plotting
+  percentage difference scaling.
 
-### Passing-Bablok Regression
-* `pb_regression()`: Non-parametric regression for method comparison
+* `pb_regression()`: Passing-Bablok regression with fast O(n log n) algorithm 
+  via the robslopes package. Includes analytical confidence intervals 
+  (Passing & Bablok 1983) and optional bootstrap BCa intervals. CUSUM test 
 
-  - Fast O(n log n) algorithm via `robslopes` package
-  - Analytical confidence intervals (Passing & Bablok 1983)
-  - Bootstrap BCa confidence intervals (optional)
-  - CUSUM test for linearity assessment
-  - `print()`, `summary()`, and `plot()` methods
-  - Multiple plot types: scatter, residuals, CUSUM
+  for linearity assessment with Kolmogorov-Smirnov p-value.
 
-### Example Datasets
-* `glucose_methods`: POC glucose meter vs laboratory analyzer (n=60)
+* S3 methods for both analyses: `print()`, `summary()`, `plot()`, and 
+  `autoplot()` (ggplot2).
+
+* Publication-ready visualizations using ggplot2, including Bland-Altman 
+  plots, regression scatter plots with confidence bands, residual plots, 
+  and CUSUM plots for linearity assessment.
+
+## Datasets
+ 
+* `glucose_methods`: Point-of-care glucose meter vs laboratory analyzer (n=60)
+
 * `creatinine_serum`: Enzymatic vs Jaffe creatinine methods (n=80)
-* `troponin_cardiac`: Two high-sensitivity troponin platforms (n=50)
 
-## Dependencies
-* `ggplot2` for publication-ready visualizations
-* `robslopes` for fast Passing-Bablok point estimation
+* `troponin_cardiac`: Two high-sensitivity cardiac troponin I platforms (n=50)
+
+## Documentation
+
+* Vignette: "Method Comparison Workflow" — step-by-step analysis guide
+
+* Vignette: "Understanding Method Comparison Statistics" — educational overview 
+  of statistical concepts for method comparison studies
