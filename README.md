@@ -1,7 +1,7 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# valytics
+# valytics <img src="man/figures/logo.png" align="right" height="139" alt="valytics logo" />
 
 <!-- badges: start -->
 
@@ -21,6 +21,12 @@ You can install the development version of valytics from
 ``` r
 # install.packages("pak")
 pak::pak("marcellogr/valytics")
+```
+
+or from CRAN (when available)
+
+``` r
+install.packages("valytics")
 ```
 
 ## Overview

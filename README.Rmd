@@ -13,7 +13,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-# valytics 
+# valytics <img src="man/figures/logo.png" align="right" height="139" alt="valytics logo" />
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/marcellogr/valytics/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/marcellogr/valytics/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
@@ -27,6 +27,11 @@ You can install the development version of valytics from [GitHub](https://github
 ```r
 # install.packages("pak")
 pak::pak("marcellogr/valytics")
+```
+
+or from CRAN (when available)
+```r
+install.packages("valytics")
 ```
 
 ## Overview
