@@ -51,15 +51,15 @@ cat("95% CI:", round(ba$results$bias_ci["lower"], 3), "to",
 
 **What this tells you:**
 
-- The point estimate indicates the direction and magnitude of systematic difference
-- The confidence interval quantifies uncertainty due to sampling variability
-- If the CI excludes zero, the bias is statistically distinguishable from zero at that confidence level
+-   The point estimate indicates the direction and magnitude of systematic difference
+-   The confidence interval quantifies uncertainty due to sampling variability
+-   If the CI excludes zero, the bias is statistically distinguishable from zero at that confidence level
 
 **What this does NOT tell you:**
 
-- Whether the bias is clinically important (that depends on your application)
-- Whether the methods are "equivalent" (you must define what that means)
-- Whether you should use one method over another
+-   Whether the bias is clinically important (that depends on your application)
+-   Whether the methods are "equivalent" (you must define what that means)
+-   Whether you should use one method over another
 
 ### What are Limits of Agreement?
 
@@ -85,10 +85,10 @@ plot(ba)
 
 **What to look for:**
 
-- **Random scatter around the bias line**: Suggests constant bias across the measurement range
-- **Funnel shape**: Variance changes with magnitude (heteroscedasticity)
-- **Systematic trend**: Proportional bias (differences depend on concentration)
-- **Points outside LoA**: Expected for ~5% of observations if assumptions hold
+-   **Random scatter around the bias line**: Suggests constant bias across the measurement range
+-   **Funnel shape**: Variance changes with magnitude (heteroscedasticity)
+-   **Systematic trend**: Proportional bias (differences depend on concentration)
+-   **Points outside LoA**: Expected for \~5% of observations if assumptions hold
 
 ### Checking Assumptions
 
@@ -103,9 +103,9 @@ if (!is.null(summ$normality_test)) {
 
 A low p-value suggests non-normality. Consider:
 
-- Examining the distribution visually
-- Using percentage differences if variance increases with magnitude
-- Applying transformations for skewed data
+-   Examining the distribution visually
+-   Using percentage differences if variance increases with magnitude
+-   Applying transformations for skewed data
 
 ```{r histogram, fig.cap = "Distribution of differences."}
 ggplot(data.frame(diff = ba$results$differences), aes(x = diff)) +
@@ -124,8 +124,8 @@ Passing-Bablok regression fits a line: `Y = intercept + slope * X`
 
 The parameters have direct interpretations:
 
-- **Slope = 1**: No proportional (multiplicative) difference
-- **Intercept = 0**: No constant (additive) difference
+-   **Slope = 1**: No proportional (multiplicative) difference
+-   **Intercept = 0**: No constant (additive) difference
 
 ```{r pb-example}
 pb <- pb_regression(
@@ -145,10 +145,10 @@ cat("  95% CI:", round(pb$results$intercept_ci["lower"], 4), "to",
 
 **How to read the confidence intervals:**
 
-- If the slope CI **includes 1**: Cannot conclude proportional bias exists
-- If the slope CI **excludes 1**: Evidence of proportional bias
-- If the intercept CI **includes 0**: Cannot conclude constant bias exists
-- If the intercept CI **excludes 0**: Evidence of constant bias
+-   If the slope CI **includes 1**: Cannot conclude proportional bias exists
+-   If the slope CI **excludes 1**: Evidence of proportional bias
+-   If the intercept CI **includes 0**: Cannot conclude constant bias exists
+-   If the intercept CI **excludes 0**: Evidence of constant bias
 
 ### Translating to Practical Differences
 
@@ -177,11 +177,11 @@ cat("CUSUM statistic:", round(pb$cusum$statistic, 4), "\n")
 cat("p-value:", round(pb$cusum$p_value, 4), "\n")
 ```
 
-A significant result (conventionally p < 0.05) suggests the relationship may not be linear across the measurement range. If non-linearity is detected:
+A significant result (conventionally p \< 0.05) suggests the relationship may not be linear across the measurement range. If non-linearity is detected:
 
-- Consider whether it's clinically meaningful
-- Examine specific concentration ranges
-- Evaluate whether a single regression is appropriate
+-   Consider whether it's clinically meaningful
+-   Examine specific concentration ranges
+-   Evaluate whether a single regression is appropriate
 
 ```{r cusum-plot, fig.cap = "CUSUM plot for linearity assessment."}
 plot(pb, type = "cusum")
@@ -204,9 +204,9 @@ Correlation measures whether methods *rank* samples similarly, not whether they 
 
 Your results depend on:
 
-- **Concentration range**: Bias may differ at low vs. high concentrations
-- **Sample types**: Matrix effects can vary
-- **Population**: Results from one patient group may not generalize
+-   **Concentration range**: Bias may differ at low vs. high concentrations
+-   **Sample types**: Matrix effects can vary
+-   **Population**: Results from one patient group may not generalize
 
 Be cautious about extrapolating beyond the conditions of your study.
 
@@ -257,19 +257,106 @@ cat(sprintf("Intercept: %.4f (95%% CI: %.4f to %.4f)\n",
 cat(sprintf("CUSUM p-value: %.4f\n", pb$cusum$p_value))
 ```
 
+## Choosing the Right Method
+
+The `valytics` package provides three complementary approaches for method comparison. Each has strengths suited to different scenarios.
+
+### Method Comparison Table
+
+```{r comparison-table, echo = FALSE}
+comparison_df <- data.frame(
+  Aspect = c(
+    "Primary question",
+    "Statistical approach",
+    "Error assumption",
+    "Outlier handling",
+    "Output focus",
+    "Sample size",
+    "Best when"
+  ),
+  `Bland-Altman` = c(
+    "How well do methods agree?",
+    "Descriptive statistics",
+    "Differences ~ Normal",
+    "Sensitive",
+    "Bias, limits of agreement",
+    "n >= 30 recommended",
+    "Defining acceptable agreement"
+  ),
+  `Passing-Bablok` = c(
+    "Is there systematic bias?",
+    "Non-parametric regression",
+    "Distribution-free",
+    "Robust",
+    "Slope, intercept CIs",
+    "n >= 30 for stable CIs",
+    "Outliers present, unknown error"
+  ),
+  Deming = c(
+    "Is there systematic bias?",
+    "Parametric regression",
+    "Errors ~ Normal",
+    "Sensitive",
+    "Slope, intercept, SEs",
+    "n >= 10 feasible",
+    "Known error ratio, small n"
+  ),
+  check.names = FALSE
+)
+
+knitr::kable(comparison_df, caption = "Comparison of method comparison approaches")
+```
+
+### Decision Flowchart
+
+1.  **Do you need to define acceptable limits of agreement?**
+    -   Yes → Use **Bland-Altman analysis**
+    -   No → Continue to step 2
+2.  **Are there potential outliers in your data?**
+    -   Yes → Use **Passing-Bablok regression**
+    -   No → Continue to step 3
+3.  **Do you know the error ratio between methods?**
+    -   Yes → Use **Deming regression** with specified λ
+    -   No → Use **Deming regression** with λ = 1 (orthogonal) or **Passing-Bablok**
+4.  **Is your sample size small (n \< 30)?**
+    -   Yes → **Deming regression** may provide more stable estimates
+    -   No → Either regression method is appropriate
+
+### Using Multiple Methods
+
+In practice, using multiple methods provides a more complete picture:
+
+```{r multiple-methods, eval = FALSE}
+# Complete method comparison workflow
+ba <- ba_analysis(reference ~ test, data = mydata)
+pb <- pb_regression(reference ~ test, data = mydata)
+dm <- deming_regression(reference ~ test, data = mydata)
+
+# Bland-Altman for agreement assessment
+summary(ba)
+plot(ba)
+
+# Compare regression methods
+cat("Passing-Bablok slope:", pb$results$slope, "\n")
+cat("Deming slope:", dm$results$slope, "\n")
+```
+
+If Passing-Bablok and Deming give similar results, you can be more confident in the conclusions. If they differ substantially, investigate why (outliers? non-normality? heteroscedasticity?).
+
 ## Summary
 
 The `valytics` package provides statistical tools for method comparison. It calculates:
 
-- **Bland-Altman**: Bias, limits of agreement, and their confidence intervals
-- **Passing-Bablok**: Slope, intercept, and linearity assessment
+-   **Bland-Altman**: Bias, limits of agreement, and their confidence intervals
+-   **Passing-Bablok**: Slope, intercept, and linearity assessment
+-   **Deming regression**: Slope, intercept, and linearity assessment when both X and Y variables have measurement errors
 
 These statistics describe the *relationship* between methods. Whether that relationship is "acceptable" for your purpose is a separate question that depends on:
 
-- Clinical decision thresholds
-- Regulatory requirements
-- Performance specifications (biological variation, CLIA, etc.)
-- Intended use
+-   Clinical decision thresholds
+-   Regulatory requirements
+-   Performance specifications (biological variation, CLIA, etc.)
+-   Intended use
 
 The package reports what the data show. You decide what it means for your application.
 

@@ -9,9 +9,9 @@
 <!-- badges: end -->
 
 Statistical methods for analytical method comparison and validation
-studies. The package implements Bland-Altman analysis and Passing-Bablok
-regression — approaches commonly used in clinical laboratory method
-validation.
+studies. The package implements Bland-Altman analysis, Passing-Bablok
+regression, and Deming regression — approaches commonly used in clinical
+laboratory method validation.
 
 ## Installation
 
@@ -23,37 +23,34 @@ You can install the development version of valytics from
 pak::pak("marcellogr/valytics")
 ```
 
-or from CRAN (when available)
-
-``` r
-install.packages("valytics")
-```
-
 ## Overview
 
-`valytics` provides tools for comparing two measurement methods:
+`valytics` provides three complementary approaches for method
+comparison:
 
-- **Bland-Altman analysis**: Assess agreement through bias and limits of
-  agreement
-- **Passing-Bablok regression**: Non-parametric regression robust to
-  outliers
+| Method             | Use Case                       | Key Output                                            |
+|--------------------|--------------------------------|-------------------------------------------------------|
+| **Bland-Altman**   | Assess agreement               | Bias, limits of agreement                             |
+| **Passing-Bablok** | Non-parametric regression      | Slope, intercept (robust to outliers)                 |
+| **Deming**         | Errors-in-variables regression | Slope, intercept (accounts for error in both methods) |
 
-Both methods produce publication-ready plots and comprehensive
-statistical summaries.
-
-## Example: Bland-Altman Analysis
+## Quick Start
 
 ``` r
 library(valytics)
 
-# Compare two creatinine measurement methods
+# Load example data
 data(creatinine_serum)
 
-ba <- ba_analysis(
- x = creatinine_serum$enzymatic,
- y = creatinine_serum$jaffe
-)
+# All three methods in one workflow
+ba <- ba_analysis(enzymatic ~ jaffe, data = creatinine_serum)
+pb <- pb_regression(enzymatic ~ jaffe, data = creatinine_serum)
+dm <- deming_regression(enzymatic ~ jaffe, data = creatinine_serum)
+```
 
+## Example: Bland-Altman Analysis
+
+``` r
 ba
 #> 
 #> Bland-Altman Analysis
@@ -84,11 +81,6 @@ plot(ba)
 ## Example: Passing-Bablok Regression
 
 ``` r
-pb <- pb_regression(
- x = creatinine_serum$enzymatic,
- y = creatinine_serum$jaffe
-)
-
 pb
 #> 
 #> Passing-Bablok Regression
@@ -99,15 +91,15 @@ pb
 #> Confidence level: 95%
 #> 
 #> Regression equation:
-#>   creatinine_serum$jaffe = 0.234 + 0.971 * creatinine_serum$enzymatic
+#>   enzymatic = -0.235 + 1.030 * jaffe
 #> 
 #> Results:
-#>   Intercept: 0.234
-#>     95% CI: [0.229, 0.239]
+#>   Intercept: -0.235
+#>     95% CI: [-0.245, -0.233]
 #>     (excludes 0: significant constant bias)
 #> 
-#>   Slope: 0.971
-#>     95% CI: [0.966, 0.974]
+#>   Slope: 1.030
+#>     95% CI: [1.025, 1.034]
 #>     (excludes 1: significant proportional bias)
 ```
 
@@ -117,20 +109,68 @@ plot(pb)
 
 <img src="man/figures/README-pb-plot-1.png" alt="Passing-Bablok regression scatter plot with regression line and confidence band" width="100%" />
 
+## Example: Deming Regression
+
+``` r
+dm
+#> 
+#> Deming Regression
+#> ---------------------------------------- 
+#> n = 80 paired observations
+#> 
+#> Error ratio (lambda): 1.000
+#> CI method: Jackknife
+#> Confidence level: 95%
+#> 
+#> Regression equation:
+#>   enzymatic = -0.291 + 1.049 * jaffe
+#> 
+#> Results:
+#>   Intercept: -0.291 (SE = 0.032)
+#>     95% CI: [-0.355, -0.227]
+#>     (excludes 0: significant constant bias)
+#> 
+#>   Slope: 1.049 (SE = 0.016)
+#>     95% CI: [1.018, 1.080]
+#>     (excludes 1: significant proportional bias)
+```
+
+``` r
+plot(dm)
+```
+
+<img src="man/figures/README-dm-plot-1.png" alt="Deming regression scatter plot with regression line and confidence band" width="100%" />
+
+## Choosing a Method
+
+| Scenario                                           | Recommended Method    |
+|----------------------------------------------------|-----------------------|
+| Assess overall agreement, define acceptable limits | Bland-Altman          |
+| Robust regression, potential outliers              | Passing-Bablok        |
+| Known error structure, parametric inference        | Deming                |
+| Quick comparison of systematic differences         | Any regression method |
+
+**Use Bland-Altman** when you want to quantify the range of disagreement
+between methods and define clinically acceptable limits.
+
+**Use Passing-Bablok** when you want a non-parametric regression that is
+robust to outliers and makes minimal assumptions.
+
+**Use Deming** when you have knowledge about the error ratio between
+methods (e.g., from validation data) or when the parametric assumptions
+are reasonable.
+
 ## Features
 
 - **Multiple interfaces**: Vector input or formula syntax
   (`method1 ~ method2`)
-- **Flexible CI methods**: Analytical (Passing-Bablok 1983) or bootstrap
-  BCa
+- **Flexible CI methods**: Analytical, jackknife, or bootstrap BCa
 - **Assumption checking**: CUSUM linearity test, Shapiro-Wilk normality
   test
 - **Publication-ready plots**: Built on ggplot2, fully customizable
-- **Tidy workflows**: Consistent API, informative error messages
+- **Tidy workflows**: Consistent API across all methods
 
 ## Example Datasets
-
-The package includes three realistic clinical datasets:
 
 | Dataset            | Description                       | n   |
 |--------------------|-----------------------------------|-----|
@@ -140,20 +180,16 @@ The package includes three realistic clinical datasets:
 
 ## References
 
-**Bland-Altman:**
+**Bland-Altman:** Bland JM, Altman DG (1986). Statistical methods for
+assessing agreement between two methods of clinical measurement.
+*Lancet*, 1(8476):307-310.
 
-- Bland JM, Altman DG (1986). Statistical methods for assessing
-  agreement between two methods of clinical measurement. *Lancet*,
-  1(8476):307-310.
-- Bland JM, Altman DG (1999). Measuring agreement in method comparison
-  studies. *Statistical Methods in Medical Research*, 8(2):135-160.
+**Passing-Bablok:** Passing H, Bablok W (1983). A new biometrical
+procedure for testing the equality of measurements from two different
+analytical methods. *J Clin Chem Clin Biochem*, 21(11):709-720.
 
-**Passing-Bablok:**
-
-- Passing H, Bablok W (1983). A new biometrical procedure for testing
-  the equality of measurements from two different analytical methods.
-  *Journal of Clinical Chemistry and Clinical Biochemistry*,
-  21(11):709-720.
+**Deming:** Linnet K (1993). Evaluation of regression procedures for
+methods comparison studies. *Clin Chem*, 39(3):424-432.
 
 ## License
 

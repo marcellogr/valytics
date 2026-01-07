@@ -1,0 +1,344 @@
+---
+title: "Deming Regression for Method Comparison"
+author: "Marcello Grassi"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Deming Regression for Method Comparison}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 6,
+  fig.height = 4,
+  fig.align = "center"
+)
+```
+
+## Introduction
+
+Deming regression is a method for fitting a linear relationship when both variables are measured with error. Unlike ordinary least squares (OLS), which assumes the independent variable is measured without error, Deming regression accounts for measurement uncertainty in both the reference and test methods. This makes it particularly appropriate for method comparison studies in clinical laboratories.
+
+This vignette introduces the theory behind Deming regression, demonstrates its use with the `valytics` package, and provides guidance on when to choose Deming regression over alternatives like Passing-Bablok regression.
+
+```{r load-package}
+library(valytics)
+library(ggplot2)
+```
+
+## The Problem with Ordinary Least Squares
+
+When comparing two analytical methods, a common approach is to regress the test method (Y) on the reference method (X) using OLS. However, OLS assumes that X is measured without error --- an assumption that rarely holds in practice.
+
+When both X and Y contain measurement error, OLS produces biased estimates:
+
+-   The slope is **attenuated** (biased toward zero)
+-   The intercept is **biased** away from the true value
+
+This phenomenon, known as *regression dilution* or *attenuation bias*, can lead to incorrect conclusions about method agreement.
+
+```{r attenuation-demo, fig.cap = "Demonstration of attenuation bias: OLS slope is attenuated when X has measurement error."}
+set.seed(42)
+
+# True relationship: Y = 1.0 * X (perfect agreement)
+true_values <- seq(50, 150, length.out = 100)
+
+# Both methods have measurement error
+x_observed <- true_values + rnorm(100, sd = 10)
+y_observed <- true_values + rnorm(100, sd = 10)
+
+# Compare OLS vs Deming
+ols_fit <- lm(y_observed ~ x_observed)
+dm_fit <- deming_regression(x_observed, y_observed)
+
+# Visualize
+df <- data.frame(x = x_observed, y = y_observed)
+
+ggplot(df, aes(x = x, y = y)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(intercept = 0, slope = 1, linetype = "solid", 
+              color = "gray50", linewidth = 1) +
+  geom_abline(intercept = coef(ols_fit)[1], slope = coef(ols_fit)[2],
+              color = "red", linewidth = 0.8) +
+  geom_abline(intercept = dm_fit$results$intercept, slope = dm_fit$results$slope,
+              color = "blue", linewidth = 0.8) +
+  annotate("text", x = 60, y = 145, label = "True (slope = 1)", color = "gray30") +
+  annotate("text", x = 60, y = 138, 
+           label = sprintf("OLS (slope = %.3f)", coef(ols_fit)[2]), color = "red") +
+  annotate("text", x = 60, y = 131,
+           label = sprintf("Deming (slope = %.3f)", dm_fit$results$slope), color = "blue") +
+  labs(title = "Attenuation Bias in OLS Regression",
+       x = "Method X", y = "Method Y") +
+  theme_minimal()
+```
+
+Notice how the OLS slope is attenuated (less than 1), while Deming regression recovers a slope closer to the true value of 1.
+
+## Deming Regression Theory
+
+Deming regression minimizes the sum of squared perpendicular distances from points to the regression line, weighted by the error variance ratio. The model assumes:
+
+$$Y_i = \alpha + \beta X_i^* + \epsilon_i$$ $$X_i = X_i^* + \delta_i$$
+
+where $X_i^*$ is the true (unobserved) value, and $\epsilon_i$ and $\delta_i$ are measurement errors in Y and X respectively.
+
+### The Error Ratio (λ)
+
+The key parameter in Deming regression is the **error ratio** (lambda, λ):
+
+$$\lambda = \frac{\text{Var}(\epsilon)}{\text{Var}(\delta)} = \frac{\text{Var(error in Y)}}{\text{Var(error in X)}}$$
+
+When λ = 1, both methods have equal error variance, and Deming regression becomes **orthogonal regression** (also called total least squares). This minimizes perpendicular distances to the line.
+
+### Choosing the Error Ratio
+
+The error ratio can be determined by:
+
+1.  **Assuming equal precision** (λ = 1): Appropriate when both methods have similar analytical performance
+2.  **Using CV ratios**: $\lambda = (CV_Y / CV_X)^2$ when CVs are known from validation studies
+3.  **Using replicate data**: Estimate variance components from replicate measurements
+
+## Basic Usage
+
+The `deming_regression()` function follows the same interface as other `valytics` functions:
+
+```{r basic-usage}
+# Load example data
+data("glucose_methods")
+
+# Deming regression with default settings (lambda = 1)
+dm <- deming_regression(reference ~ poc_meter, data = glucose_methods)
+dm
+```
+
+The output shows:
+
+-   **Error ratio**: The λ value used (1 = orthogonal regression)
+-   **Regression equation**: The fitted line
+-   **Slope and intercept**: Point estimates with confidence intervals
+-   **Interpretation**: Whether CIs include the null values (0 for intercept, 1 for slope)
+
+## Detailed Results
+
+The `summary()` method provides comprehensive output:
+
+```{r summary}
+summary(dm)
+```
+
+## Visualization
+
+The `plot()` method creates publication-ready figures:
+
+```{r scatter-plot, fig.cap = "Deming regression scatter plot with confidence band."}
+plot(dm)
+```
+
+### Residual Diagnostics
+
+Examine residuals to check model assumptions:
+
+```{r residual-plot, fig.cap = "Residual plot for assessing model fit."}
+plot(dm, type = "residuals")
+```
+
+Look for:
+
+-   **Random scatter around zero**: Good model fit
+-   **Trends**: Suggest non-linearity
+-   **Funnel shape**: Suggest heteroscedasticity (non-constant variance)
+
+## Specifying the Error Ratio
+
+When methods have different precision, specify the error ratio:
+
+```{r error-ratio}
+# If POC meter has twice the error variance of the reference
+dm_lambda2 <- deming_regression(
+  reference ~ poc_meter, 
+  data = glucose_methods,
+  error_ratio = 2
+)
+
+dm_lambda2
+```
+
+### Estimating λ from CVs
+
+If you know the coefficients of variation from method validation:
+
+```{r cv-estimation, eval = FALSE}
+# Example: Reference CV = 2.5%, POC CV = 4.5%
+cv_reference <- 0.025
+cv_poc <- 0.045
+
+lambda_estimated <- (cv_poc / cv_reference)^2
+# lambda_estimated = 3.24
+
+dm_cv <- deming_regression(
+  reference ~ poc_meter,
+  data = glucose_methods,
+  error_ratio = lambda_estimated
+)
+```
+
+## Confidence Interval Methods
+
+Two methods are available for computing confidence intervals:
+
+### Jackknife (Default)
+
+The jackknife method, following Linnet (1990), provides robust standard error estimates:
+
+```{r jackknife}
+dm_jack <- deming_regression(
+  reference ~ poc_meter,
+  data = glucose_methods,
+  ci_method = "jackknife"
+)
+
+# Standard errors are available
+cat("Slope SE:", round(dm_jack$results$slope_se, 4), "\n")
+cat("Intercept SE:", round(dm_jack$results$intercept_se, 4), "\n")
+```
+
+### Bootstrap BCa
+
+For smaller samples or when parametric assumptions are questionable:
+
+```{r bootstrap, eval = FALSE}
+dm_boot <- deming_regression(
+  reference ~ poc_meter,
+  data = glucose_methods,
+  ci_method = "bootstrap",
+  boot_n = 1999
+)
+```
+
+## Comparison with Passing-Bablok
+
+Both Deming and Passing-Bablok regression are appropriate for method comparison, but they have different characteristics:
+
+| Aspect                  | Deming               | Passing-Bablok             |
+|-------------------------|----------------------|----------------------------|
+| **Approach**            | Parametric           | Non-parametric             |
+| **Error assumption**    | Normally distributed | Distribution-free          |
+| **Outlier sensitivity** | Sensitive            | Robust                     |
+| **Error ratio**         | User-specified (λ)   | Implicitly assumes equal   |
+| **Sample size**         | Works with smaller n | Needs \~30+ for stable CIs |
+| **Ties**                | Handles ties         | Can be affected by ties    |
+
+### When to Use Deming
+
+-   You have knowledge about the error ratio (from validation data)
+-   Data are approximately normally distributed
+-   No severe outliers
+-   Smaller sample sizes (n \< 30)
+
+### When to Use Passing-Bablok
+
+-   Error structure is unknown
+-   Potential outliers in the data
+-   Non-normal error distributions
+-   Larger sample sizes available
+
+### Side-by-Side Comparison
+
+```{r comparison, fig.cap = "Comparison of Deming and Passing-Bablok regression."}
+# Fit both models
+dm <- deming_regression(reference ~ poc_meter, data = glucose_methods)
+pb <- pb_regression(reference ~ poc_meter, data = glucose_methods)
+
+# Compare coefficients
+comparison <- data.frame(
+  Method = c("Deming", "Passing-Bablok"),
+  Slope = c(dm$results$slope, pb$results$slope),
+  Slope_Lower = c(dm$results$slope_ci["lower"], pb$results$slope_ci["lower"]),
+  Slope_Upper = c(dm$results$slope_ci["upper"], pb$results$slope_ci["upper"]),
+  Intercept = c(dm$results$intercept, pb$results$intercept),
+  Int_Lower = c(dm$results$intercept_ci["lower"], pb$results$intercept_ci["lower"]),
+  Int_Upper = c(dm$results$intercept_ci["upper"], pb$results$intercept_ci["upper"])
+)
+
+print(comparison, digits = 3)
+```
+
+```{r comparison-plot, fig.cap = "Visual comparison of Deming and Passing-Bablok regression lines."}
+# Visual comparison
+ggplot(glucose_methods, aes(x = reference, y = poc_meter)) +
+  geom_point(alpha = 0.6) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "gray50") +
+  geom_abline(intercept = dm$results$intercept, slope = dm$results$slope,
+              color = "#2166AC", linewidth = 1) +
+  geom_abline(intercept = pb$results$intercept, slope = pb$results$slope,
+              color = "#B2182B", linewidth = 1) +
+  annotate("text", x = 80, y = 340, label = "Identity", color = "gray50") +
+  annotate("text", x = 80, y = 320, label = "Deming", color = "#2166AC") +
+  annotate("text", x = 80, y = 300, label = "Passing-Bablok", color = "#B2182B") +
+  labs(title = "Regression Method Comparison",
+       x = "Reference (mg/dL)",
+       y = "POC Meter (mg/dL)") +
+  theme_minimal()
+```
+
+## Complete Workflow Example
+
+Here is a complete method comparison workflow using the creatinine dataset:
+
+```{r workflow}
+# Load data
+data("creatinine_serum")
+
+# 1. Deming regression
+dm <- deming_regression(enzymatic ~ jaffe, data = creatinine_serum)
+
+# 2. View summary
+summary(dm)
+```
+
+```{r workflow-plot, fig.cap = "Complete Deming regression analysis for creatinine methods."}
+# 3. Create visualization
+plot(dm, title = "Creatinine: Jaffe vs Enzymatic Method")
+```
+
+```{r workflow-residuals, fig.cap = "Residual diagnostics for creatinine comparison."}
+# 4. Check residuals
+plot(dm, type = "residuals")
+```
+
+## Extracting Results
+
+For further analysis or reporting, extract components from the result object:
+
+```{r extraction}
+# Coefficients
+slope <- dm$results$slope
+intercept <- dm$results$intercept
+
+# Confidence intervals
+slope_ci <- dm$results$slope_ci
+intercept_ci <- dm$results$intercept_ci
+
+# Standard errors
+slope_se <- dm$results$slope_se
+intercept_se <- dm$results$intercept_se
+
+# Formatted output for reporting
+cat(sprintf("Slope: %.4f (95%% CI: %.4f to %.4f)\n", 
+            slope, slope_ci["lower"], slope_ci["upper"]))
+cat(sprintf("Intercept: %.4f (95%% CI: %.4f to %.4f)\n",
+            intercept, intercept_ci["lower"], intercept_ci["upper"]))
+```
+
+## References
+
+Cornbleet PJ, Gochman N. Incorrect least-squares regression coefficients in method-comparison analysis. Clinical Chemistry. 1979;25(3):432-438.
+
+Linnet K. Estimation of the linear relationship between the measurements of two methods with proportional errors. Statistics in Medicine. 1990;9(12):1463-1473.
+
+Linnet K. Evaluation of regression procedures for methods comparison studies. Clinical Chemistry. 1993;39(3):424-432.
+
+Deming WE. Statistical Adjustment of Data. Wiley; 1943.

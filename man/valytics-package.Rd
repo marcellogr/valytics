@@ -6,7 +6,9 @@
 \alias{valytics-package}
 \title{valytics: Statistical Methods for Analytical Method Comparison and Validation}
 \description{
-Statistical methods for analytical method comparison and validation studies. Implements Bland-Altman analysis and Passing-Bablok regression, approaches commonly used in clinical laboratory method validation following CLSI guidelines. Provides publication-ready plots and comprehensive statistical summaries.
+\if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
+
+Statistical methods for analytical method comparison and validation studies. Implements Bland-Altman analysis, Passing-Bablok regression, and Demin regression, approaches commonly used in clinical laboratory method validation following CLSI guidelines. Provides publication-ready plots and comprehensive statistical summaries.
 }
 \seealso{
 Useful links:

@@ -1,15 +1,15 @@
 Package: valytics
 Title: Statistical Methods for Analytical Method Comparison and Validation
-Version: 0.1.0
+Version: 0.2.0
 Authors@R: 
     person("Marcello", "Grassi", , "marcello.grassi@tum.de", 
            role = c("aut", "cre"),
            comment = c(ORCID = "0009-0008-8904-4988"))
 Description: Statistical methods for analytical method comparison and validation 
-    studies. Implements Bland-Altman analysis and Passing-Bablok regression,
-    approaches commonly used in clinical laboratory method validation following
-    CLSI guidelines. Provides publication-ready plots and comprehensive
-    statistical summaries.
+    studies. Implements Bland-Altman analysis, Passing-Bablok regression, and
+	Demin regression, approaches commonly used in clinical laboratory 
+	method validation following CLSI guidelines. Provides publication-ready 
+	plots and comprehensive statistical summaries.
 License: GPL-3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
