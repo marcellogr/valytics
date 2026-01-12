@@ -18,8 +18,8 @@
 
 ## Documentation
 
-* New vignette: "Setting Quality Goals with Biological Variation" — explains 
- the biological variation model for analytical performance specifications 
+* New vignette: "Setting Quality Goals with Biological Variation" -- explains 
+  the biological variation model for analytical performance specifications 
   with practical examples using the new ATE functions.
 
 # valytics 0.2.0
@@ -36,10 +36,10 @@
 
 ## Documentation
 
-* New vignette: "Deming Regression for Method Comparison" — comprehensive guide 
+* New vignette: "Deming Regression for Method Comparison" -- comprehensive guide 
   to Deming regression theory and practical application.
 
-* Updated vignette: "Understanding Method Comparison Statistics" — added 
+* Updated vignette: "Understanding Method Comparison Statistics" -- added 
   guidance on choosing between regression methods.
 
 # valytics 0.1.0
@@ -74,7 +74,7 @@ Initial CRAN release.
 
 ## Documentation
 
-* Vignette: "Method Comparison Workflow" — step-by-step analysis guide
+* Vignette: "Method Comparison Workflow" -- step-by-step analysis guide
 
-* Vignette: "Understanding Method Comparison Statistics" — educational overview 
+* Vignette: "Understanding Method Comparison Statistics" -- educational overview 
   of statistical concepts for method comparison studies

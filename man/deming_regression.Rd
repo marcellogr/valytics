@@ -97,19 +97,19 @@ regression) is designed for situations where both X and Y are measured with
 error. This is the typical case in method comparison studies where both the
 reference and test methods have measurement uncertainty.
 
-The error ratio (lambda, λ) represents the ratio of error variances:
+The error ratio (lambda, \eqn{\lambda}) represents the ratio of error variances:
 \deqn{\lambda = \frac{Var(\epsilon_y)}{Var(\epsilon_x)}}
 
-When λ = 1 (default), this is equivalent to orthogonal regression, which
-minimizes perpendicular distances to the regression line. When λ ≠ 1, the
+When \eqn{\lambda} = 1 (default), this is equivalent to orthogonal regression, which
+minimizes perpendicular distances to the regression line. When \eqn{\lambda} != 1, the
 regression minimizes a weighted combination of horizontal and vertical
 distances.
 
 \strong{Choosing the error ratio:}
 \itemize{
-\item If both methods have similar precision: use λ = 1
+\item If both methods have similar precision: use \eqn{\lambda} = 1
 \item If precision differs: estimate from replicate measurements as
-λ = CV_y² / CV_x² (squared coefficient of variation ratio)
+\eqn{\lambda} = CV_y² / CV_x² (squared coefficient of variation ratio)
 \item If one method is much more precise: consider ordinary least squares
 }
 }
@@ -117,9 +117,9 @@ distances.
 
 \itemize{
 \item \strong{Slope = 1}: No proportional difference between methods
-\item \strong{Slope ≠ 1}: Proportional (multiplicative) difference exists
+\item \strong{Slope != 1}: Proportional (multiplicative) difference exists
 \item \strong{Intercept = 0}: No constant difference between methods
-\item \strong{Intercept ≠ 0}: Constant (additive) difference exists
+\item \strong{Intercept != 0}: Constant (additive) difference exists
 }
 
 Use the confidence intervals to test these hypotheses: if 1 is within the
