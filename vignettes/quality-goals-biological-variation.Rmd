@@ -1,0 +1,229 @@
+---
+title: "Setting Quality Goals with Biological Variation"
+author: "Marcello Grassi"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Setting Quality Goals with Biological Variation}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+ collapse = TRUE,
+ comment = "#>",
+  fig.width = 6,
+  fig.height = 4,
+  fig.align = "center"
+)
+```
+## Introduction
+A fundamental question in laboratory medicine is: "How good does my analytical method need to be?" The answer depends on the intended clinical use. A method that is acceptable for population screening may be inadequate for monitoring individual patients.
+This vignette introduces the biological variation model for setting analytical performance specifications, implemented in the `valytics` package through three functions:
+- `ate_from_bv()`: Calculate specifications from biological variation data
+- `sigma_metric()`: Quantify performance using the Six Sigma metric
+- `ate_assessment()`: Evaluate observed performance against specifications
+```{r load-package}
+library(valytics)
+```
+## The Biological Variation Model
+### Concept
+Every measurand (analyte) exhibits natural variation even in healthy individuals. This variation has two components:
+- **Within-subject variation (CV~I~)**: Day-to-day fluctuation within an individual
+- **Between-subject variation (CV~G~)**: Differences between individuals in a population
+The biological variation model, developed by Fraser, Petersen, and colleagues, uses these inherent variations to derive meaningful analytical performance goals. The logic is straightforward: analytical error should be small enough that it does not significantly increase the total variation observed in test results.
+### The Formulas
+At the **desirable** performance level, the formulas are:
+**Allowable Imprecision:**
+$$CV_A \leq 0.50 \times CV_I$$
+**Allowable Bias:**
+$$Bias \leq 0.25 \times \sqrt{CV_I^2 + CV_G^2}$$
+**Total Allowable Error:**
+$$TEa \leq k \times CV_A + Bias$$
+Where *k* is a coverage factor (typically 1.65 for ~95% of results).
+### Performance Hierarchy
+Three performance tiers are defined, each with different multipliers:
+| Level | Imprecision | Bias | Stringency |
+|-------|-------------|------|------------|
+| Optimal | 0.25 × CV~I~ | 0.125 × √(CV~I~² + CV~G~²) | Most stringent |
+| Desirable | 0.50 × CV~I~ | 0.25 × √(CV~I~² + CV~G~²) | Standard target |
+| Minimum | 0.75 × CV~I~ | 0.375 × √(CV~I~² + CV~G~²) | Least stringent |
+## Calculating Specifications with ate_from_bv()
+### Basic Usage
+The `ate_from_bv()` function calculates all three specifications from biological variation data:
+```{r ate-basic}
+# Example: Glucose
+# CV_I = 5.6%, CV_G = 7.5% (illustrative values)
+ate_glucose <- ate_from_bv(cvi = 5.6, cvg = 7.5)
+ate_glucose
+```
+### Comparing Performance Levels
+The `summary()` method shows all three performance tiers:
+```{r ate-summary}
+summary(ate_glucose)
+```
+### Different Performance Levels
+You can calculate specifications for any tier:
+```{r ate-levels}
+# Optimal (most stringent)
+ate_optimal <- ate_from_bv(cvi = 5.6, cvg = 7.5, level = "optimal")
+ate_optimal$specifications$tea
+
+# Minimum (least stringent)
+ate_minimum <- ate_from_bv(cvi = 5.6, cvg = 7.5, level = "minimum")
+ate_minimum$specifications$tea
+```
+### When CV~G~ is Unknown
+If only within-subject variation is available, imprecision goals can still be calculated:
+```{r ate-cvi-only}
+ate_cv_only <- ate_from_bv(cvi = 5.6)
+ate_cv_only
+```
+## The Six Sigma Metric
+### Concept
+The sigma metric provides a standardized way to express method quality. It answers: "How many standard deviations of analytical error fit between my observed performance and the allowable limit?"
+$$\sigma = \frac{TEa - |Bias|}{CV}$$
+Higher sigma values indicate better performance:
+| Sigma | Category | Defects per Million |
+|-------|----------|---------------------|
+| ≥ 6 | World Class | ~3.4 |
+| ≥ 5 | Excellent | ~230 |
+| ≥ 4 | Good | ~6,200 |
+| ≥ 3 | Marginal | ~66,800 |
+| ≥ 2 | Poor | ~308,500 |
+| < 2 | Unacceptable | > 690,000 |
+### Calculating Sigma
+```{r sigma-basic}
+# Assume observed: bias = 1.5%, CV = 2.5%
+# Using TEa from biological variation
+sm <- sigma_metric(
+ bias = 1.5,
+  cv = 2.5,
+  tea = ate_glucose$specifications$tea
+)
+sm
+```
+### Detailed Sigma Summary
+```{r sigma-summary}
+summary(sm)
+```
+### Interpreting Sigma in Clinical Context
+In clinical laboratories:
+
+- **Sigma ≥ 6**: Minimal QC needed; method is highly reliable
+- **Sigma 4-6**: Standard QC procedures adequate
+- **Sigma 3-4**: Enhanced QC recommended; monitor closely
+- **Sigma < 3**: High risk of errors; consider method improvement
+
+## Comprehensive Assessment with ate_assessment()
+### Basic Assessment
+The `ate_assessment()` function evaluates observed performance against specifications:
+```{r assess-basic}
+assess <- ate_assessment(
+  bias = 1.5,
+  cv = 2.5,
+  tea = ate_glucose$specifications$tea
+)
+assess
+```
+### Full Component Assessment
+When you have specifications for all components:
+```{r assess-full}
+assess_full <- ate_assessment(
+  bias = 1.5,
+  cv = 2.5,
+  tea = ate_glucose$specifications$tea,
+  allowable_bias = ate_glucose$specifications$allowable_bias,
+  allowable_cv = ate_glucose$specifications$allowable_cv
+)
+summary(assess_full)
+```
+### Handling a Failing Method
+```{r assess-fail}
+# A method with poor performance
+assess_poor <- ate_assessment(
+  bias = 4.0,
+  cv = 5.0,
+  tea = ate_glucose$specifications$tea,
+  allowable_bias = ate_glucose$specifications$allowable_bias,
+  allowable_cv = ate_glucose$specifications$allowable_cv
+)
+summary(assess_poor)
+```
+## Complete Workflow Example
+Here is a typical workflow for evaluating a new glucose method:
+```{r workflow}
+# Step 1: Define quality goals from biological variation
+specs <- ate_from_bv(cvi = 5.6, cvg = 7.5, level = "desirable")
+cat("Quality Specifications:\n")
+cat(sprintf("  Allowable CV: %.2f%%\n", specs$specifications$allowable_cv))
+cat(sprintf("  Allowable Bias: %.2f%%\n", specs$specifications$allowable_bias))
+cat(sprintf("  TEa: %.2f%%\n\n", specs$specifications$tea))
+
+# Step 2: Assume we measured method performance
+# (In practice, from validation studies)
+observed_bias <- 1.8
+observed_cv <- 2.2
+
+# Step 3: Calculate sigma metric
+sm <- sigma_metric(observed_bias, observed_cv, specs$specifications$tea)
+cat(sprintf("Sigma Metric: %.2f (%s)\n\n", sm$sigma, sm$interpretation$category))
+
+# Step 4: Full assessment
+assessment <- ate_assessment(
+  bias = observed_bias,
+  cv = observed_cv,
+  tea = specs$specifications$tea,
+  allowable_bias = specs$specifications$allowable_bias,
+  allowable_cv = specs$specifications$allowable_cv
+)
+
+# Step 5: Decision
+if (assessment$assessment$overall) {
+  cat("DECISION: Method acceptable for clinical use\n")
+} else {
+  cat("DECISION: Method requires improvement\n")
+}
+```
+## Obtaining Biological Variation Data
+The quality of your specifications depends on reliable biological variation estimates.
+### Recommended Source
+The **EFLM Biological Variation Database** is the current authoritative source:
+- Website: https://biologicalvariation.eu/
+- Provides rigorously reviewed BV estimates
+- Includes quality grades for each estimate
+- Updated regularly with new studies
+### Using the Database
+1. Navigate to https://biologicalvariation.eu/
+2. Search for your analyte
+3. Review the CV~I~ and CV~G~ values
+4. Note the quality grade (A, B, C, D) and number of studies
+5. Use values appropriate for your population and context
+### Important Considerations
+- BV data may vary by population, age, sex, and health status
+- Ensure the BV data match your intended use population
+- Higher quality grades (A, B) indicate more reliable estimates
+- When multiple estimates exist, consider the range
+## Beyond Biological Variation
+While the biological variation model is widely used, it is not the only approach to setting quality specifications. Other models include:
+1. **Clinical outcome-based**: Specifications derived from clinical decision limits
+2. **State-of-the-art**: Based on achievable performance (e.g., proficiency testing data)
+3. **Regulatory requirements**: Fixed limits from agencies (e.g., CLIA)
+The `ate_assessment()` and `sigma_metric()` functions work with TEa values from any source—simply provide your specification directly rather than calculating from biological variation.
+```{r other-sources}
+# Using a CLIA-based TEa for glucose (example: ±6 mg/dL or ±10%)
+# For a sample at 100 mg/dL, 10% = 10 mg/dL
+sm_clia <- sigma_metric(bias = 2, cv = 3, tea = 10)
+sm_clia
+```
+## Summary
+The biological variation model provides a scientifically grounded approach to setting analytical quality specifications:
+1. **`ate_from_bv()`** translates biological variation into actionable specifications
+2. **`sigma_metric()`** provides a universal quality scale for comparing methods
+3. **`ate_assessment()`** gives a clear pass/fail evaluation
+These tools help laboratories make informed decisions about method acceptability while recognizing that the final decision depends on clinical context and regulatory requirements.
+## References
+Fraser CG, Petersen PH (1993). Desirable standards for laboratory tests if they are to fulfill medical needs. Clinical Chemistry, 39(7):1447-1453.
+Ricos C, Alvarez V, Cava F, et al. (1999). Current databases on biological variation: pros, cons and progress. Scandinavian Journal of Clinical and Laboratory Investigation, 59(7):491-500.
+Aarsand AK, Fernandez-Calle P, Webster C, et al. (2020). The EFLM Biological Variation Database. https://biologicalvariation.eu/
+Westgard JO, Westgard SA (2006). The quality of laboratory testing today: an assessment of sigma metrics for analytic quality using performance data from proficiency testing surveys and the CLIA criteria for acceptable performance. American Journal of Clinical Pathology, 125(3):343-354.

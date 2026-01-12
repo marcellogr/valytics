@@ -8,7 +8,7 @@
 \description{
 \if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
 
-Statistical methods for analytical method comparison and validation studies. Implements Bland-Altman analysis, Passing-Bablok regression, and Demin regression, approaches commonly used in clinical laboratory method validation following CLSI guidelines. Provides publication-ready plots and comprehensive statistical summaries.
+Statistical methods for analytical method comparison and validation studies. Implements Bland-Altman analysis, Passing-Bablok regression, and Deming regression for method comparison, along with tools for setting quality goals based on biological variation and calculating Six Sigma metrics. Commonly used in clinical laboratory method validation following CLSI guidelines. Provides publication-ready plots and comprehensive statistical summaries.
 }
 \seealso{
 Useful links:
