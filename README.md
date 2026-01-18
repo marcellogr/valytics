@@ -5,18 +5,26 @@
 
 <!-- badges: start -->
 
+[![CRAN
+status](https://www.r-pkg.org/badges/version/valytics)](https://CRAN.R-project.org/package=valytics)
 [![R-CMD-check](https://github.com/marcellogr/valytics/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/marcellogr/valytics/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
 Statistical methods for analytical method comparison and validation
 studies. The package implements Bland-Altman analysis, Passing-Bablok
-regression, and Deming regression — approaches commonly used in clinical
-laboratory method validation.
+regression, Deming regression, and quality goal specifications based on
+biological variation — approaches commonly used in clinical laboratory
+method validation.
 
 ## Installation
 
-You can install the development version of valytics from
-[GitHub](https://github.com/) with:
+Install valytics from CRAN:
+
+``` r
+install.packages("valytics")
+```
+
+Or install the development version from [GitHub](https://github.com/):
 
 ``` r
 # install.packages("pak")
@@ -25,32 +33,36 @@ pak::pak("marcellogr/valytics")
 
 ## Overview
 
-`valytics` provides three complementary approaches for method
-comparison:
+`valytics` provides tools for analytical method validation:
 
-| Method             | Use Case                       | Key Output                                            |
-|--------------------|--------------------------------|-------------------------------------------------------|
-| **Bland-Altman**   | Assess agreement               | Bias, limits of agreement                             |
-| **Passing-Bablok** | Non-parametric regression      | Slope, intercept (robust to outliers)                 |
-| **Deming**         | Errors-in-variables regression | Slope, intercept (accounts for error in both methods) |
+**Method Comparison** - **Bland-Altman analysis**: Assess agreement
+through bias and limits of agreement - **Passing-Bablok regression**:
+Non-parametric regression robust to outliers - **Deming regression**:
+Errors-in-variables regression for method comparison
 
-## Quick Start
+**Quality Specifications** - **Biological variation-based goals**:
+Calculate allowable total error from CV<sub>I</sub> and CV<sub>G</sub> -
+**Sigma metrics**: Six Sigma quality assessment - **Performance
+assessment**: Evaluate methods against quality specifications
+
+All methods produce publication-ready plots and comprehensive
+statistical summaries.
+
+## Method Comparison Examples
+
+### Bland-Altman Analysis
 
 ``` r
 library(valytics)
 
-# Load example data
+# Compare two creatinine measurement methods
 data(creatinine_serum)
 
-# All three methods in one workflow
-ba <- ba_analysis(enzymatic ~ jaffe, data = creatinine_serum)
-pb <- pb_regression(enzymatic ~ jaffe, data = creatinine_serum)
-dm <- deming_regression(enzymatic ~ jaffe, data = creatinine_serum)
-```
+ba <- ba_analysis(
+  x = creatinine_serum$enzymatic,
+  y = creatinine_serum$jaffe
+)
 
-## Example: Bland-Altman Analysis
-
-``` r
 ba
 #> 
 #> Bland-Altman Analysis
@@ -78,9 +90,14 @@ plot(ba)
 
 <img src="man/figures/README-ba-plot-1.png" alt="Bland-Altman plot showing differences between Jaffe and enzymatic creatinine methods" width="100%" />
 
-## Example: Passing-Bablok Regression
+### Passing-Bablok Regression
 
 ``` r
+pb <- pb_regression(
+  x = creatinine_serum$enzymatic,
+  y = creatinine_serum$jaffe
+)
+
 pb
 #> 
 #> Passing-Bablok Regression
@@ -91,15 +108,15 @@ pb
 #> Confidence level: 95%
 #> 
 #> Regression equation:
-#>   enzymatic = -0.235 + 1.030 * jaffe
+#>   creatinine_serum$jaffe = 0.234 + 0.971 * creatinine_serum$enzymatic
 #> 
 #> Results:
-#>   Intercept: -0.235
-#>     95% CI: [-0.245, -0.233]
+#>   Intercept: 0.234
+#>     95% CI: [0.229, 0.239]
 #>     (excludes 0: significant constant bias)
 #> 
-#>   Slope: 1.030
-#>     95% CI: [1.025, 1.034]
+#>   Slope: 0.971
+#>     95% CI: [0.966, 0.974]
 #>     (excludes 1: significant proportional bias)
 ```
 
@@ -109,9 +126,14 @@ plot(pb)
 
 <img src="man/figures/README-pb-plot-1.png" alt="Passing-Bablok regression scatter plot with regression line and confidence band" width="100%" />
 
-## Example: Deming Regression
+### Deming Regression
 
 ``` r
+dm <- deming_regression(
+  x = creatinine_serum$enzymatic,
+  y = creatinine_serum$jaffe
+)
+
 dm
 #> 
 #> Deming Regression
@@ -123,15 +145,15 @@ dm
 #> Confidence level: 95%
 #> 
 #> Regression equation:
-#>   enzymatic = -0.291 + 1.049 * jaffe
+#>   creatinine_serum$jaffe = 0.277 + 0.953 * creatinine_serum$enzymatic
 #> 
 #> Results:
-#>   Intercept: -0.291 (SE = 0.032)
-#>     95% CI: [-0.355, -0.227]
+#>   Intercept: 0.277 (SE = 0.028)
+#>     95% CI: [0.222, 0.332]
 #>     (excludes 0: significant constant bias)
 #> 
-#>   Slope: 1.049 (SE = 0.016)
-#>     95% CI: [1.018, 1.080]
+#>   Slope: 0.953 (SE = 0.014)
+#>     95% CI: [0.925, 0.982]
 #>     (excludes 1: significant proportional bias)
 ```
 
@@ -141,36 +163,102 @@ plot(dm)
 
 <img src="man/figures/README-dm-plot-1.png" alt="Deming regression scatter plot with regression line and confidence band" width="100%" />
 
-## Choosing a Method
+## Quality Specifications
 
-| Scenario                                           | Recommended Method    |
-|----------------------------------------------------|-----------------------|
-| Assess overall agreement, define acceptable limits | Bland-Altman          |
-| Robust regression, potential outliers              | Passing-Bablok        |
-| Known error structure, parametric inference        | Deming                |
-| Quick comparison of systematic differences         | Any regression method |
+### Allowable Total Error from Biological Variation
 
-**Use Bland-Altman** when you want to quantify the range of disagreement
-between methods and define clinically acceptable limits.
+Calculate performance goals based on within-subject (CV<sub>I</sub>) and
+between-subject (CV<sub>G</sub>) biological variation:
 
-**Use Passing-Bablok** when you want a non-parametric regression that is
-robust to outliers and makes minimal assumptions.
+``` r
+# Creatinine biological variation (from EFLM database)
+# CV_I = 5.95%, CV_G = 14.7%
+ate <- ate_from_bv(cvi = 5.95, cvg = 14.7)
 
-**Use Deming** when you have knowledge about the error ratio between
-methods (e.g., from validation data) or when the parametric assumptions
-are reasonable.
+ate
+#> 
+#> Analytical Performance Specifications from Biological Variation
+#> ------------------------------------------------------------ 
+#> 
+#> Input:
+#>   Within-subject CV (CV_I): 5.95%
+#>   Between-subject CV (CV_G): 14.70%
+#>   Performance level: desirable
+#>   Coverage factor (k): 1.65
+#> 
+#> Specifications:
+#>   Allowable imprecision (CV_A): 2.98%
+#>   Allowable bias: 3.96%
+#>   Total allowable error (TEa): 8.87%
+```
+
+### Six Sigma Quality Assessment
+
+``` r
+# Evaluate method performance
+sm <- sigma_metric(bias = 1.5, cv = 2.5, tea = 10)
+
+sm
+#> 
+#> Six Sigma Metric
+#> ---------------------------------------- 
+#> 
+#> Input:
+#>   Observed bias: 1.50%
+#>   Observed CV: 2.50%
+#>   Total allowable error (TEa): 10.00%
+#> 
+#> Result:
+#>   Sigma: 3.40
+#>   Performance: Marginal
+#>   Defect rate: ~66,800 per million
+```
+
+### Performance Assessment
+
+``` r
+# Full quality assessment
+assess <- ate_assessment(
+  bias = 1.5, 
+  cv = 2.5, 
+  tea = 10,
+  allowable_bias = 4.0, 
+  allowable_cv = 3.0
+)
+
+assess
+#> 
+#> Analytical Performance Assessment
+#> -------------------------------------------------- 
+#> 
+#>   >>> METHOD ACCEPTABLE <<<
+#> 
+#> Performance Summary:
+#>   Parameter              Observed  Allowable     Status
+#>   -------------------- ---------- ---------- ----------
+#>   Bias                      1.50%      4.00%       PASS
+#>   CV (Imprecision)          2.50%      3.00%       PASS
+#>   Total Error               5.62%     10.00%       PASS
+#> 
+#> Sigma Metric: 3.40 (Marginal)
+```
 
 ## Features
 
 - **Multiple interfaces**: Vector input or formula syntax
   (`method1 ~ method2`)
-- **Flexible CI methods**: Analytical, jackknife, or bootstrap BCa
+- **Flexible CI methods**: Analytical or bootstrap BCa confidence
+  intervals
 - **Assumption checking**: CUSUM linearity test, Shapiro-Wilk normality
   test
+- **Quality goals**: Biological variation-based specifications
+  (optimal/desirable/minimum)
 - **Publication-ready plots**: Built on ggplot2, fully customizable
-- **Tidy workflows**: Consistent API across all methods
+- **Tidy workflows**: Consistent API, informative summaries
 
 ## Example Datasets
+
+The package includes three realistic clinical datasets:
 
 | Dataset            | Description                       | n   |
 |--------------------|-----------------------------------|-----|
@@ -178,18 +266,44 @@ are reasonable.
 | `creatinine_serum` | Enzymatic vs. Jaffe methods       | 80  |
 | `troponin_cardiac` | Two hs-cTnI platforms             | 50  |
 
+## Vignettes
+
+- **Method Comparison Workflow**: Step-by-step analysis guide
+- **Understanding Method Comparison Statistics**: Educational overview
+- **Deming Regression**: When and how to use errors-in-variables
+  regression
+- **Quality Goals from Biological Variation**: Setting performance
+  specifications
+
 ## References
 
-**Bland-Altman:** Bland JM, Altman DG (1986). Statistical methods for
-assessing agreement between two methods of clinical measurement.
-*Lancet*, 1(8476):307-310.
+**Bland-Altman:**
 
-**Passing-Bablok:** Passing H, Bablok W (1983). A new biometrical
-procedure for testing the equality of measurements from two different
-analytical methods. *J Clin Chem Clin Biochem*, 21(11):709-720.
+- Bland JM, Altman DG (1986). Statistical methods for assessing
+  agreement between two methods of clinical measurement. *Lancet*,
+  1(8476):307-310.
+- Bland JM, Altman DG (1999). Measuring agreement in method comparison
+  studies. *Statistical Methods in Medical Research*, 8(2):135-160.
 
-**Deming:** Linnet K (1993). Evaluation of regression procedures for
-methods comparison studies. *Clin Chem*, 39(3):424-432.
+**Passing-Bablok:**
+
+- Passing H, Bablok W (1983). A new biometrical procedure for testing
+  the equality of measurements from two different analytical methods.
+  *Journal of Clinical Chemistry and Clinical Biochemistry*,
+  21(11):709-720.
+
+**Deming:**
+
+- Linnet K (1990). Estimation of the linear relationship between the
+  measurements of two methods with proportional errors. *Statistics in
+  Medicine*, 9(12):1463-1473.
+
+**Biological Variation:**
+
+- Fraser CG, Petersen PH (1993). Desirable standards for laboratory
+  tests if they are to fulfill medical needs. *Clinical Chemistry*,
+  39(7):1447-1453.
+- EFLM Biological Variation Database: <https://biologicalvariation.eu/>
 
 ## License
 
