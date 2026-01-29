@@ -66,11 +66,18 @@ create_multisite_data <- function(seed = 42, mean_val = 100,
     replicate = 1:n_reps
   )
   
-  site_effect <- rep(rnorm(n_sites, 0, sd_site), each = n_days * n_reps)
-  day_effect <- rep(rnorm(n_sites * n_days, 0, sd_day), each = n_reps)
-  error <- rnorm(nrow(data), 0, sd_error)
+  # Generate effects
+  site_effects <- rnorm(n_sites, 0, sd_site)
+  day_effects <- rnorm(n_sites * n_days, 0, sd_day)
+  errors <- rnorm(nrow(data), 0, sd_error)
   
-  data$value <- mean_val + site_effect + day_effect + error
+  # Map effects to data rows correctly
+  # expand.grid varies the first argument fastest, so site varies fastest
+  site_effect <- site_effects[as.numeric(as.factor(data$site))]
+  day_idx <- (as.numeric(as.factor(data$site)) - 1) * n_days + as.numeric(as.factor(data$day))
+  day_effect <- day_effects[day_idx]
+  
+  data$value <- mean_val + site_effect + day_effect + errors
   data
 }
 
@@ -111,6 +118,27 @@ create_multisample_data <- function(seed = 42) {
   do.call(rbind, data_list)
 }
 
+#' Create day-only precision data (5 days x 5 replicates)
+create_day_only_data <- function(grand_mean = 100, sd_day = 2.0, sd_error = 1.5,
+                                 seed = 42) {
+  set.seed(seed)
+  
+  n_days <- 5
+  n_reps <- 5
+  
+  data <- expand.grid(
+    day = factor(1:n_days),
+    replicate = factor(1:n_reps)
+  )
+  
+  day_effects <- rnorm(n_days, 0, sd_day)
+  errors <- rnorm(nrow(data), 0, sd_error)
+  
+  day_effect <- day_effects[as.numeric(data$day)]
+  data$value <- grand_mean + day_effect + errors
+  
+  data
+}
 
 # Input Validation Tests ----
 
@@ -554,6 +582,33 @@ test_that("precision_study generates sensible design description", {
   expect_true(grepl("5 days", result2$design$description))
 })
 
+test_that("CI handles zero variance component gracefully", {
+  # Create data with very small between-day variance
+  set.seed(42)
+  data <- expand.grid(day = factor(1:10), replicate = 1:5)
+  data$value <- 100 + rnorm(nrow(data), 0, 2)  # Only error variance
+  
+  prec <- precision_study(data, value = "value", day = "day",
+                          ci_method = "satterthwaite")
+  
+  # Should not error, and CIs should be present
+  expect_s3_class(prec, "precision_study")
+  expect_true("ci_lower" %in% names(prec$precision))
+})
+
+
+test_that("CI handles small sample sizes", {
+  # Minimum viable data
+  set.seed(42)
+  data <- expand.grid(day = factor(1:3), replicate = 1:2)
+  data$value <- 100 + rnorm(nrow(data), 0, 2)
+  
+  prec <- precision_study(data, value = "value", day = "day",
+                          ci_method = "satterthwaite")
+  
+  # Should not error
+  expect_s3_class(prec, "precision_study")
+})
 
 # ANOVA Variance Component Tests ----
 
@@ -658,9 +713,16 @@ test_that("ANOVA estimates variance components for multi-site design", {
     replicate = 1:n_reps
   )
   
-  site_effect <- rep(rnorm(n_sites, 0, sqrt(true_var_site)), each = n_days * n_reps)
-  day_effect <- rep(rnorm(n_sites * n_days, 0, sqrt(true_var_day)), each = n_reps)
+  # Generate random effects
+  site_effects <- rnorm(n_sites, 0, sqrt(true_var_site))
+  day_effects <- rnorm(n_sites * n_days, 0, sqrt(true_var_day))
+  
+  # Map effects correctly - expand.grid varies first argument (site) fastest
+  site_effect <- site_effects[as.numeric(as.factor(data$site))]
+  day_idx <- (as.numeric(as.factor(data$site)) - 1) * n_days + as.numeric(as.factor(data$day))
+  day_effect <- day_effects[day_idx]
   error <- rnorm(nrow(data), 0, sqrt(true_var_error))
+  
   data$value <- 100 + site_effect + day_effect + error
   
   result <- precision_study(data, value = "value", day = "day", site = "site")
@@ -690,11 +752,21 @@ test_that("ANOVA estimates variance components for full site/day/run design", {
     replicate = 1:n_reps
   )
   
-  # Add variance components
-  site_effect <- rep(rnorm(n_sites, 0, 2), each = n_days * n_runs * n_reps)
-  day_effect <- rep(rnorm(n_sites * n_days, 0, 1.5), each = n_runs * n_reps)
-  run_effect <- rep(rnorm(n_sites * n_days * n_runs, 0, 1), each = n_reps)
+  # Generate random effects
+  site_effects <- rnorm(n_sites, 0, 2)
+  day_effects <- rnorm(n_sites * n_days, 0, 1.5)
+  run_effects <- rnorm(n_sites * n_days * n_runs, 0, 1)
+  
+  # Map effects correctly - expand.grid varies first argument (site) fastest
+  site_idx <- as.numeric(as.factor(data$site))
+  day_idx <- (site_idx - 1) * n_days + as.numeric(as.factor(data$day))
+  run_idx <- (day_idx - 1) * n_runs + as.numeric(as.factor(data$run))
+  
+  site_effect <- site_effects[site_idx]
+  day_effect <- day_effects[day_idx]
+  run_effect <- run_effects[run_idx]
   error <- rnorm(nrow(data), 0, 2)
+  
   data$value <- 100 + site_effect + day_effect + run_effect + error
   
   result <- precision_study(
@@ -882,4 +954,612 @@ test_that("Reproducibility is correctly calculated for multi-site", {
   actual_repro_sd <- prec$sd[prec$measure == "Reproducibility"]
   
   expect_equal(actual_repro_sd, expected_repro_sd, tolerance = 1e-10)
+})
+
+# Test data generators (for Confidence Intervals) ----
+
+#' Create EP05-style precision data (20 days x 2 runs x 2 replicates)
+create_ep05_data <- function(grand_mean = 100, sd_day = 1.5, sd_run = 1.0,
+                             sd_error = 2.0, seed = 42) {
+  set.seed(seed)
+  
+  n_days <- 20
+  n_runs <- 2
+  n_reps <- 2
+  
+  data <- expand.grid(
+    day = factor(1:n_days),
+    run = factor(1:n_runs),
+    replicate = factor(1:n_reps)
+  )
+  
+  # Add variance components
+  day_effects <- rnorm(n_days, 0, sd_day)
+  run_effects <- rnorm(n_days * n_runs, 0, sd_run)
+  errors <- rnorm(nrow(data), 0, sd_error)
+  
+  day_effect <- day_effects[as.numeric(data$day)]
+  run_effect <- run_effects[(as.numeric(data$day) - 1) * n_runs + as.numeric(data$run)]
+  
+  data$value <- grand_mean + day_effect + run_effect + errors
+  
+  data
+}
+
+
+#' Create day-only precision data (5 days x 5 replicates)
+create_day_only_data <- function(grand_mean = 100, sd_day = 2.0, sd_error = 1.5,
+                                 seed = 42) {
+  set.seed(seed)
+  
+  n_days <- 5
+  n_reps <- 5
+  
+  data <- expand.grid(
+    day = factor(1:n_days),
+    replicate = factor(1:n_reps)
+  )
+  
+  day_effects <- rnorm(n_days, 0, sd_day)
+  errors <- rnorm(nrow(data), 0, sd_error)
+  
+  day_effect <- day_effects[as.numeric(data$day)]
+  data$value <- grand_mean + day_effect + errors
+  
+  data
+}
+
+#' Create multi-site precision data
+create_multisite_data <- function(grand_mean = 100, sd_site = 2.5, sd_day = 1.5,
+                                  sd_error = 2.0, seed = 42) {
+  set.seed(seed)
+  
+  n_sites <- 3
+  n_days <- 5
+  n_reps <- 5
+  
+  data <- expand.grid(
+    site = factor(1:n_sites),
+    day = factor(1:n_days),
+    replicate = factor(1:n_reps)
+  )
+  
+  site_effects <- rnorm(n_sites, 0, sd_site)
+  day_effects <- rnorm(n_sites * n_days, 0, sd_day)
+  errors <- rnorm(nrow(data), 0, sd_error)
+  
+  site_effect <- site_effects[as.numeric(data$site)]
+  day_idx <- (as.numeric(data$site) - 1) * n_days + as.numeric(data$day)
+  day_effect <- day_effects[day_idx]
+  
+  data$value <- grand_mean + site_effect + day_effect + errors
+  
+  data
+}
+
+# Satterthwaite CI tests ----
+
+test_that("Satterthwaite CI produces valid structure for day/run design", {
+  data <- create_ep05_data()
+  prec <- precision_study(data, value = "value", day = "day", run = "run",
+                          ci_method = "satterthwaite")
+  
+  # Check precision data frame has CI columns
+  
+  expect_true("ci_lower" %in% names(prec$precision))
+  expect_true("ci_upper" %in% names(prec$precision))
+  expect_true("cv_ci_lower" %in% names(prec$precision))
+  expect_true("cv_ci_upper" %in% names(prec$precision))
+  
+  # Check all measures have CIs
+  expect_equal(nrow(prec$precision), 4)  # repeatability, between-run, between-day, intermediate
+  
+  # CIs should be numeric
+  expect_true(is.numeric(prec$precision$ci_lower))
+  expect_true(is.numeric(prec$precision$ci_upper))
+})
+
+
+test_that("Satterthwaite CI bounds are correctly ordered", {
+  data <- create_ep05_data()
+  prec <- precision_study(data, value = "value", day = "day", run = "run",
+                          ci_method = "satterthwaite")
+  
+  # Lower bound should be less than or equal to upper bound
+  for (i in seq_len(nrow(prec$precision))) {
+    if (!is.na(prec$precision$ci_lower[i]) && !is.na(prec$precision$ci_upper[i])) {
+      expect_true(prec$precision$ci_lower[i] <= prec$precision$ci_upper[i],
+                  info = paste("Row", i, prec$precision$measure[i]))
+    }
+  }
+  
+  # Point estimate should be within CI (for most cases)
+  for (i in seq_len(nrow(prec$precision))) {
+    sd_val <- prec$precision$sd[i]
+    ci_l <- prec$precision$ci_lower[i]
+    ci_u <- prec$precision$ci_upper[i]
+    
+    if (!is.na(ci_l) && !is.na(ci_u) && sd_val > 0) {
+      expect_true(sd_val >= ci_l * 0.99,  # Small tolerance for numerical precision
+                  info = paste("Lower bound check for", prec$precision$measure[i]))
+      expect_true(sd_val <= ci_u * 1.01,
+                  info = paste("Upper bound check for", prec$precision$measure[i]))
+    }
+  }
+})
+
+
+test_that("Satterthwaite CI bounds are non-negative", {
+  data <- create_ep05_data()
+  prec <- precision_study(data, value = "value", day = "day", run = "run",
+                          ci_method = "satterthwaite")
+  
+  # All CI bounds for SD should be non-negative
+  expect_true(all(is.na(prec$precision$ci_lower) | prec$precision$ci_lower >= 0))
+  expect_true(all(is.na(prec$precision$ci_upper) | prec$precision$ci_upper >= 0))
+})
+
+
+test_that("Satterthwaite CI works with day-only design", {
+  data <- create_day_only_data()
+  prec <- precision_study(data, value = "value", day = "day",
+                          ci_method = "satterthwaite")
+  
+  expect_true("ci_lower" %in% names(prec$precision))
+  expect_true("ci_upper" %in% names(prec$precision))
+  
+  # Should have repeatability, between-day, and intermediate
+  expect_equal(nrow(prec$precision), 3)
+})
+
+
+test_that("Satterthwaite CI respects confidence level", {
+  data <- create_ep05_data()
+  
+  prec_95 <- precision_study(data, value = "value", day = "day", run = "run",
+                             conf_level = 0.95, ci_method = "satterthwaite")
+  prec_90 <- precision_study(data, value = "value", day = "day", run = "run",
+                             conf_level = 0.90, ci_method = "satterthwaite")
+  prec_99 <- precision_study(data, value = "value", day = "day", run = "run",
+                             conf_level = 0.99, ci_method = "satterthwaite")
+  
+  # 99% CI should be wider than 95%, which should be wider than 90%
+  for (i in seq_len(nrow(prec_95$precision))) {
+    width_90 <- prec_90$precision$ci_upper[i] - prec_90$precision$ci_lower[i]
+    width_95 <- prec_95$precision$ci_upper[i] - prec_95$precision$ci_lower[i]
+    width_99 <- prec_99$precision$ci_upper[i] - prec_99$precision$ci_lower[i]
+    
+    if (!is.na(width_90) && !is.na(width_95) && !is.na(width_99)) {
+      expect_true(width_99 >= width_95,
+                  info = paste("99% >= 95% for", prec_95$precision$measure[i]))
+      expect_true(width_95 >= width_90,
+                  info = paste("95% >= 90% for", prec_95$precision$measure[i]))
+    }
+  }
+})
+
+
+test_that("Satterthwaite CI width decreases with sample size", {
+  # Small sample
+  set.seed(42)
+  data_small <- expand.grid(day = factor(1:5), replicate = 1:3)
+  data_small$value <- 100 + rnorm(nrow(data_small), 0, 2)
+  
+  # Larger sample
+  set.seed(42)
+  data_large <- expand.grid(day = factor(1:20), replicate = 1:5)
+  data_large$value <- 100 + rnorm(nrow(data_large), 0, 2)
+  
+  prec_small <- precision_study(data_small, value = "value", day = "day",
+                                ci_method = "satterthwaite")
+  prec_large <- precision_study(data_large, value = "value", day = "day",
+                                ci_method = "satterthwaite")
+  
+  # Width for repeatability should be smaller with larger sample
+  width_small <- prec_small$precision$ci_upper[1] - prec_small$precision$ci_lower[1]
+  width_large <- prec_large$precision$ci_upper[1] - prec_large$precision$ci_lower[1]
+  
+  expect_true(width_large < width_small)
+})
+
+
+# MLS CI tests ----
+
+test_that("MLS CI produces valid structure", {
+  data <- create_ep05_data()
+  prec <- precision_study(data, value = "value", day = "day", run = "run",
+                          ci_method = "mls")
+  
+  expect_true("ci_lower" %in% names(prec$precision))
+  expect_true("ci_upper" %in% names(prec$precision))
+  expect_equal(nrow(prec$precision), 4)
+})
+
+
+test_that("MLS CI bounds are non-negative", {
+  data <- create_ep05_data()
+  prec <- precision_study(data, value = "value", day = "day", run = "run",
+                          ci_method = "mls")
+  
+  expect_true(all(is.na(prec$precision$ci_lower) | prec$precision$ci_lower >= 0))
+  expect_true(all(is.na(prec$precision$ci_upper) | prec$precision$ci_upper >= 0))
+})
+
+
+test_that("MLS and Satterthwaite CIs have same point estimates", {
+  data <- create_ep05_data()
+  
+  prec_sat <- precision_study(data, value = "value", day = "day", run = "run",
+                              ci_method = "satterthwaite")
+  prec_mls <- precision_study(data, value = "value", day = "day", run = "run",
+                              ci_method = "mls")
+  
+  # Point estimates should be identical
+  expect_equal(prec_sat$precision$sd, prec_mls$precision$sd)
+  expect_equal(prec_sat$precision$cv_pct, prec_mls$precision$cv_pct)
+})
+
+
+# Bootstrap CI tests ----
+
+test_that("Bootstrap CI produces valid structure", {
+  skip_on_cran()  # Skip on CRAN due to computation time
+  
+  data <- create_day_only_data()
+  prec <- precision_study(data, value = "value", day = "day",
+                          ci_method = "bootstrap", boot_n = 199)
+  
+  expect_true("ci_lower" %in% names(prec$precision))
+  expect_true("ci_upper" %in% names(prec$precision))
+})
+
+
+test_that("Bootstrap CI bounds contain point estimate", {
+  skip_on_cran()
+  
+  data <- create_day_only_data()
+  prec <- precision_study(data, value = "value", day = "day",
+                          ci_method = "bootstrap", boot_n = 199)
+  
+  # Point estimate should generally be within CI
+  for (i in seq_len(nrow(prec$precision))) {
+    sd_val <- prec$precision$sd[i]
+    ci_l <- prec$precision$ci_lower[i]
+    ci_u <- prec$precision$ci_upper[i]
+    
+    if (!is.na(ci_l) && !is.na(ci_u) && sd_val > 0) {
+      # Allow some tolerance for bootstrap variability
+      expect_true(sd_val >= ci_l * 0.8 || ci_l == 0,
+                  info = paste("Lower bound for", prec$precision$measure[i]))
+      expect_true(sd_val <= ci_u * 1.5,
+                  info = paste("Upper bound for", prec$precision$measure[i]))
+    }
+  }
+})
+
+
+test_that("Bootstrap CI bounds are non-negative", {
+  skip_on_cran()
+  
+  data <- create_day_only_data()
+  prec <- precision_study(data, value = "value", day = "day",
+                          ci_method = "bootstrap", boot_n = 199)
+  
+  expect_true(all(is.na(prec$precision$ci_lower) | prec$precision$ci_lower >= 0))
+})
+
+
+# CV CI tests ----
+
+test_that("CV CIs are correctly calculated from SD CIs", {
+  data <- create_ep05_data()
+  prec <- precision_study(data, value = "value", day = "day", run = "run")
+  
+  grand_mean <- mean(data$value)
+  
+  # CV CI should be 100 * SD_CI / mean
+  for (i in seq_len(nrow(prec$precision))) {
+    if (!is.na(prec$precision$ci_lower[i])) {
+      expected_cv_lower <- 100 * prec$precision$ci_lower[i] / grand_mean
+      expect_equal(prec$precision$cv_ci_lower[i], expected_cv_lower,
+                   tolerance = 0.001)
+    }
+    if (!is.na(prec$precision$ci_upper[i])) {
+      expected_cv_upper <- 100 * prec$precision$ci_upper[i] / grand_mean
+      expect_equal(prec$precision$cv_ci_upper[i], expected_cv_upper,
+                   tolerance = 0.001)
+    }
+  }
+})
+
+
+
+# Multi-site CI tests ----
+
+test_that("Multi-site design has reproducibility CI", {
+  data <- create_multisite_data()
+  prec <- precision_study(data, value = "value", site = "site", day = "day",
+                          ci_method = "satterthwaite")
+  
+  # Should have reproducibility row
+  expect_true("Reproducibility" %in% prec$precision$measure)
+  
+  # Reproducibility should have CI
+  repro_row <- which(prec$precision$measure == "Reproducibility")
+  expect_true(!is.na(prec$precision$ci_lower[repro_row]))
+  expect_true(!is.na(prec$precision$ci_upper[repro_row]))
+})
+
+
+test_that("Multi-site CIs are correctly ordered", {
+  data <- create_multisite_data()
+  prec <- precision_study(data, value = "value", site = "site", day = "day",
+                          ci_method = "satterthwaite")
+  
+  # Reproducibility SD should be >= Intermediate SD
+  inter_sd <- prec$precision$sd[prec$precision$measure == "Intermediate precision"]
+  repro_sd <- prec$precision$sd[prec$precision$measure == "Reproducibility"]
+  
+  expect_true(repro_sd >= inter_sd)
+})
+
+
+# Internal helper function tests ----
+
+test_that(".ci_single_variance produces valid CI", {
+  # This tests the internal function directly
+  # Access internal function
+  ci_single <- valytics:::.ci_single_variance
+  
+  # Test with typical values
+  ci <- ci_single(variance = 4, df = 20, alpha = 0.05)
+  
+  expect_named(ci, c("lower", "upper"))
+  expect_true(ci["lower"] < 4)
+  expect_true(ci["upper"] > 4)
+  expect_true(ci["lower"] >= 0)
+})
+
+
+test_that(".ci_variance_sum produces valid CI for sum", {
+  ci_sum <- valytics:::.ci_variance_sum
+  
+  # Test with two variance components
+  ci <- ci_sum(variances = c(4, 2), dfs = c(20, 15), alpha = 0.05)
+  
+  expect_named(ci, c("lower", "upper"))
+  expect_true(ci["lower"] < 6)  # Sum is 6
+  expect_true(ci["upper"] > 6)
+  expect_true(ci["lower"] >= 0)
+})
+
+
+test_that(".ci_single_variance handles edge cases", {
+  ci_single <- valytics:::.ci_single_variance
+  
+  # Zero variance
+  ci <- ci_single(variance = 0, df = 20, alpha = 0.05)
+  expect_equal(unname(ci["lower"]), 0)
+  
+  # NA variance
+  ci <- ci_single(variance = NA, df = 20, alpha = 0.05)
+  expect_true(is.na(ci["lower"]))
+  expect_true(is.na(ci["upper"]))
+  
+  # Zero df
+  ci <- ci_single(variance = 4, df = 0, alpha = 0.05)
+  expect_true(is.na(ci["lower"]))
+})
+
+
+# Integration tests ----
+
+test_that("All CI methods produce consistent precision summaries", {
+  data <- create_day_only_data()
+  
+  prec_sat <- precision_study(data, value = "value", day = "day",
+                              ci_method = "satterthwaite")
+  prec_mls <- precision_study(data, value = "value", day = "day",
+                              ci_method = "mls")
+  
+  # Same structure
+  expect_equal(nrow(prec_sat$precision), nrow(prec_mls$precision))
+  expect_equal(prec_sat$precision$measure, prec_mls$precision$measure)
+  
+  # Same point estimates
+  expect_equal(prec_sat$precision$sd, prec_mls$precision$sd)
+})
+
+
+test_that("CI method is recorded in settings", {
+  data <- create_ep05_data()
+  
+  prec_sat <- precision_study(data, value = "value", day = "day", run = "run",
+                              ci_method = "satterthwaite")
+  prec_mls <- precision_study(data, value = "value", day = "day", run = "run",
+                              ci_method = "mls")
+  
+  expect_equal(prec_sat$settings$ci_method, "satterthwaite")
+  expect_equal(prec_mls$settings$ci_method, "mls")
+})
+
+# REML Estimation Tests ----
+
+test_that("REML requires lme4 package", {
+  skip_if_not_installed("lme4")
+  
+  data <- create_day_only_data()
+  
+  # Should work when lme4 is available
+  prec <- precision_study(data, value = "value", day = "day", method = "reml")
+  expect_s3_class(prec, "precision_study")
+})
+
+
+test_that("REML returns correct structure for day-only design", {
+  skip_if_not_installed("lme4")
+  
+  data <- create_day_only_data()
+  prec <- precision_study(data, value = "value", day = "day", method = "reml")
+  
+  # Check variance components structure
+  expect_s3_class(prec$variance_components, "data.frame")
+  expect_true("between_day" %in% prec$variance_components$component)
+  expect_true("error" %in% prec$variance_components$component)
+  expect_true("total" %in% prec$variance_components$component)
+  
+  # Check all values are numeric and non-negative
+  expect_true(all(prec$variance_components$variance >= 0))
+  expect_true(all(prec$variance_components$sd >= 0))
+  
+  # Method should be recorded
+  expect_equal(prec$settings$method, "reml")
+})
+
+
+test_that("REML returns correct structure for day/run design", {
+  skip_if_not_installed("lme4")
+  
+  data <- create_ep05_data()
+  prec <- precision_study(data, value = "value", day = "day", run = "run", 
+                          method = "reml")
+  
+  # Check variance components
+  expect_true("between_day" %in% prec$variance_components$component)
+  expect_true("between_run" %in% prec$variance_components$component)
+  expect_true("error" %in% prec$variance_components$component)
+  
+  # All variances should be non-negative
+  expect_true(all(prec$variance_components$variance >= 0))
+})
+
+
+test_that("REML produces similar results to ANOVA for balanced data", {
+  skip_if_not_installed("lme4")
+  
+  # Create balanced dataset
+  set.seed(123)
+  data <- create_ep05_data()
+  
+  prec_anova <- precision_study(data, value = "value", day = "day", run = "run",
+                                method = "anova")
+  prec_reml <- precision_study(data, value = "value", day = "day", run = "run",
+                               method = "reml")
+  
+  # Variance estimates should be similar (not exact due to different methods)
+  # Allow 20% relative tolerance for comparison
+  anova_total <- sum(prec_anova$variance_components$variance[
+    prec_anova$variance_components$component != "total"])
+  reml_total <- sum(prec_reml$variance_components$variance[
+    prec_reml$variance_components$component != "total"])
+  
+  expect_equal(anova_total, reml_total, tolerance = 0.2 * max(anova_total, reml_total))
+})
+
+
+test_that("REML works with multi-site design", {
+  skip_if_not_installed("lme4")
+  
+  data <- create_multisite_data()
+  prec <- precision_study(data, value = "value", site = "site", day = "day",
+                          method = "reml")
+  
+  # Check site variance component is present
+  expect_true("between_site" %in% prec$variance_components$component)
+  expect_true("between_day" %in% prec$variance_components$component)
+  
+  # All variances non-negative
+  expect_true(all(prec$variance_components$variance >= 0))
+})
+
+
+test_that("REML CI calculations work", {
+  skip_if_not_installed("lme4")
+  
+  data <- create_day_only_data()
+  prec <- precision_study(data, value = "value", day = "day", 
+                          method = "reml", ci_method = "satterthwaite")
+  
+  # Check CIs are present
+  expect_true(all(c("ci_lower", "ci_upper") %in% names(prec$precision)))
+  
+  # CIs should be numeric
+  expect_true(all(is.numeric(prec$precision$ci_lower)))
+  expect_true(all(is.numeric(prec$precision$ci_upper)))
+})
+
+
+test_that("REML handles unbalanced data better than ANOVA",
+          {
+            skip_if_not_installed("lme4")
+            
+            # Create unbalanced dataset
+            set.seed(456)
+            data <- data.frame(
+              day = c(rep(1, 4), rep(2, 3), rep(3, 5), rep(4, 2), rep(5, 4)),
+              value = rnorm(18, mean = 100, sd = 5)
+            )
+            data$value <- data$value + as.numeric(factor(data$day)) * 2
+            
+            # Both methods should run without error
+            prec_anova <- precision_study(data, value = "value", day = "day", method = "anova")
+            prec_reml <- precision_study(data, value = "value", day = "day", method = "reml")
+            
+            expect_s3_class(prec_anova, "precision_study")
+            expect_s3_class(prec_reml, "precision_study")
+            
+            # Design should detect unbalanced
+            expect_false(prec_anova$design$balanced)
+            expect_false(prec_reml$design$balanced)
+          })
+
+
+test_that("REML works with strong between-run variance", {
+  skip_if_not_installed("lme4")
+  
+  # Create data with clear run effect
+  set.seed(42)
+  n_days <- 5
+  n_runs <- 2
+  n_reps <- 3
+  
+  data_list <- list()
+  idx <- 1
+  for (d in 1:n_days) {
+    day_effect <- rnorm(1, 0, 3)
+    for (r in 1:n_runs) {
+      run_effect <- rnorm(1, 0, 5)  # Strong run effect
+      for (rep in 1:n_reps) {
+        data_list[[idx]] <- data.frame(
+          day = d, run = r,
+          value = 100 + day_effect + run_effect + rnorm(1, 0, 2)
+        )
+        idx <- idx + 1
+      }
+    }
+  }
+  data <- do.call(rbind, data_list)
+  
+  prec <- precision_study(data, value = "value", day = "day", run = "run",
+                          method = "reml")
+  
+  # Between-run should be non-zero
+  run_var <- prec$variance_components$variance[
+    prec$variance_components$component == "between_run"]
+  expect_true(run_var > 0)
+})
+
+
+test_that("REML with bootstrap CI works", {
+  skip_if_not_installed("lme4")
+  skip_on_cran()  # Skip due to computation time
+  
+  data <- create_day_only_data()
+  
+  # Use fewer bootstrap samples for testing
+  prec <- precision_study(data, value = "value", day = "day",
+                          method = "reml", ci_method = "bootstrap", boot_n = 199)
+  
+  expect_s3_class(prec, "precision_study")
+  expect_true(!any(is.na(prec$precision$ci_lower)))
 })

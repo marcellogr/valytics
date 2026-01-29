@@ -201,17 +201,17 @@ precision_study <- function(data,
                             ci_method = c("satterthwaite", "mls", "bootstrap"),
                             boot_n = 1999,
                             method = c("anova", "reml")) {
-
-
+  
+  
   # Capture the call
   
   call <- match.call()
-
+  
   # Match arguments
-
+  
   ci_method <- match.arg(ci_method)
   method <- match.arg(method)
-
+  
   # Check REML availability
   
   if (method == "reml") {
@@ -1221,58 +1221,766 @@ precision_study <- function(data,
 }
 
 
-# REML Estimation (Placeholder) ----
+# REML Estimation ----
 
 #' Estimate variance components using REML
 #' @noRd
 #' @keywords internal
 .estimate_vc_reml <- function(data, factors, value_col) {
   
-  # This will be fully implemented in Phase 1d
-  # Requires lme4 package
+  # REML estimation using lme4::lmer()
+  # Requires lme4 package (checked in main function)
   
-  warning("REML estimation not yet implemented. Returning placeholder.",
-          call. = FALSE)
+  n <- nrow(data)
+  grand_mean <- mean(data[[value_col]], na.rm = TRUE)
   
-  # Return same structure as ANOVA
-  list(
-    variance_components = data.frame(
-      component = c("day", "run", "error", "total"),
-      variance = c(NA_real_, NA_real_, NA_real_, NA_real_),
-      sd = c(NA_real_, NA_real_, NA_real_, NA_real_),
-      pct_total = c(NA_real_, NA_real_, NA_real_, 100),
-      df = c(NA_real_, NA_real_, NA_real_, NA_real_),
-      stringsAsFactors = FALSE
+  # Determine which factors are present
+  has_site <- !is.null(factors$site)
+  has_day <- !is.null(factors$day)
+  has_run <- !is.null(factors$run)
+  
+  # Prepare data with factors
+  model_data <- data.frame(
+    y = data[[value_col]]
+  )
+  
+  # Add factors as proper factor variables
+  if (has_day) {
+    model_data$day <- factor(data[[factors$day]])
+  }
+  if (has_run) {
+    # For nested run within day, create unique run identifier
+    model_data$run <- factor(interaction(data[[factors$day]], 
+                                         data[[factors$run]], 
+                                         drop = TRUE))
+  }
+  if (has_site) {
+    model_data$site <- factor(data[[factors$site]])
+  }
+  
+  # Build formula and fit model based on available factors
+  if (has_site && has_day && has_run) {
+    result <- .reml_site_day_run(model_data, n)
+  } else if (has_site && has_day && !has_run) {
+    result <- .reml_site_day(model_data, n)
+  } else if (!has_site && has_day && has_run) {
+    result <- .reml_day_run(model_data, n)
+  } else if (!has_site && has_day && !has_run) {
+    result <- .reml_day_only(model_data, n)
+  } else {
+    stop("Unsupported factor combination for REML.", call. = FALSE)
+  }
+  
+  result$grand_mean <- grand_mean
+  result
+}
+
+
+#' REML estimation for day-only design
+#' @noRd
+#' @keywords internal
+.reml_day_only <- function(model_data, n) {
+  
+  # Model: y ~ 1 + (1|day)
+  fit <- lme4::lmer(y ~ 1 + (1 | day), data = model_data, REML = TRUE)
+  
+  # Extract variance components
+  vc <- lme4::VarCorr(fit)
+  var_day <- as.numeric(vc$day)
+  var_error <- attr(vc, "sc")^2
+  var_total <- var_day + var_error
+  
+  # Degrees of freedom (approximate for REML)
+  n_days <- length(unique(model_data$day))
+  df_day <- n_days - 1
+  df_error <- n - n_days
+  df_total <- n - 1
+  
+  # Build variance components table
+  variance_components <- data.frame(
+    component = c("between_day", "error", "total"),
+    variance = c(var_day, var_error, var_total),
+    sd = c(sqrt(var_day), sqrt(var_error), sqrt(var_total)),
+    pct_total = c(
+      100 * var_day / var_total,
+      100 * var_error / var_total,
+      100
     ),
-    anova_table = NULL,
-    grand_mean = mean(data[[value_col]], na.rm = TRUE)
+    df = c(df_day, df_error, df_total),
+    stringsAsFactors = FALSE
+  )
+  
+  list(
+    variance_components = variance_components,
+    anova_table = NULL,  # REML doesn't produce traditional ANOVA table
+    model = fit,
+    method = "reml"
   )
 }
 
 
-# Confidence Intervals (Placeholder) ----
+#' REML estimation for day/run design
+#' @noRd
+#' @keywords internal
+.reml_day_run <- function(model_data, n) {
+  
+  # Model: y ~ 1 + (1|day) + (1|run)
+  # run is already coded as day:run interaction (unique identifier)
+  fit <- lme4::lmer(y ~ 1 + (1 | day) + (1 | run), data = model_data, REML = TRUE)
+  
+  # Extract variance components
+  vc <- lme4::VarCorr(fit)
+  var_day <- as.numeric(vc$day)
+  var_run <- as.numeric(vc$run)
+  var_error <- attr(vc, "sc")^2
+  var_total <- var_day + var_run + var_error
+  
+  # Degrees of freedom (approximate for REML)
+  n_days <- length(unique(model_data$day))
+  n_runs <- length(unique(model_data$run))
+  df_day <- n_days - 1
+  df_run <- n_runs - n_days
+  df_error <- n - n_runs
+  df_total <- n - 1
+  
+  # Build variance components table
+  variance_components <- data.frame(
+    component = c("between_day", "between_run", "error", "total"),
+    variance = c(var_day, var_run, var_error, var_total),
+    sd = c(sqrt(var_day), sqrt(var_run), sqrt(var_error), sqrt(var_total)),
+    pct_total = c(
+      100 * var_day / var_total,
+      100 * var_run / var_total,
+      100 * var_error / var_total,
+      100
+    ),
+    df = c(df_day, df_run, df_error, df_total),
+    stringsAsFactors = FALSE
+  )
+  
+  list(
+    variance_components = variance_components,
+    anova_table = NULL,
+    model = fit,
+    method = "reml"
+  )
+}
+
+
+#' REML estimation for site/day design
+#' @noRd
+#' @keywords internal
+.reml_site_day <- function(model_data, n) {
+  
+  # Model: y ~ 1 + (1|site) + (1|site:day)
+  # Create nested day within site
+  model_data$site_day <- interaction(model_data$site, model_data$day, drop = TRUE)
+  
+  fit <- lme4::lmer(y ~ 1 + (1 | site) + (1 | site_day), data = model_data, REML = TRUE)
+  
+  # Extract variance components
+  vc <- lme4::VarCorr(fit)
+  var_site <- as.numeric(vc$site)
+  var_day <- as.numeric(vc$site_day)
+  var_error <- attr(vc, "sc")^2
+  var_total <- var_site + var_day + var_error
+  
+  # Degrees of freedom (approximate)
+  n_sites <- length(unique(model_data$site))
+  n_site_days <- length(unique(model_data$site_day))
+  df_site <- n_sites - 1
+  df_day <- n_site_days - n_sites
+  df_error <- n - n_site_days
+  df_total <- n - 1
+  
+  # Build variance components table
+  variance_components <- data.frame(
+    component = c("between_site", "between_day", "error", "total"),
+    variance = c(var_site, var_day, var_error, var_total),
+    sd = c(sqrt(var_site), sqrt(var_day), sqrt(var_error), sqrt(var_total)),
+    pct_total = c(
+      100 * var_site / var_total,
+      100 * var_day / var_total,
+      100 * var_error / var_total,
+      100
+    ),
+    df = c(df_site, df_day, df_error, df_total),
+    stringsAsFactors = FALSE
+  )
+  
+  list(
+    variance_components = variance_components,
+    anova_table = NULL,
+    model = fit,
+    method = "reml"
+  )
+}
+
+
+#' REML estimation for site/day/run design
+#' @noRd
+#' @keywords internal
+.reml_site_day_run <- function(model_data, n) {
+  
+  # Model: y ~ 1 + (1|site) + (1|site:day) + (1|site:day:run)
+  # Create nested factors
+  model_data$site_day <- interaction(model_data$site, model_data$day, drop = TRUE)
+  # run is already site:day:run (created in parent function)
+  
+  fit <- lme4::lmer(y ~ 1 + (1 | site) + (1 | site_day) + (1 | run), 
+                    data = model_data, REML = TRUE)
+  
+  # Extract variance components
+  vc <- lme4::VarCorr(fit)
+  var_site <- as.numeric(vc$site)
+  var_day <- as.numeric(vc$site_day)
+  var_run <- as.numeric(vc$run)
+  var_error <- attr(vc, "sc")^2
+  var_total <- var_site + var_day + var_run + var_error
+  
+  # Degrees of freedom (approximate)
+  n_sites <- length(unique(model_data$site))
+  n_site_days <- length(unique(model_data$site_day))
+  n_runs <- length(unique(model_data$run))
+  df_site <- n_sites - 1
+  df_day <- n_site_days - n_sites
+  df_run <- n_runs - n_site_days
+  df_error <- n - n_runs
+  df_total <- n - 1
+  
+  # Build variance components table
+  variance_components <- data.frame(
+    component = c("between_site", "between_day", "between_run", "error", "total"),
+    variance = c(var_site, var_day, var_run, var_error, var_total),
+    sd = c(sqrt(var_site), sqrt(var_day), sqrt(var_run), sqrt(var_error), sqrt(var_total)),
+    pct_total = c(
+      100 * var_site / var_total,
+      100 * var_day / var_total,
+      100 * var_run / var_total,
+      100 * var_error / var_total,
+      100
+    ),
+    df = c(df_site, df_day, df_run, df_error, df_total),
+    stringsAsFactors = FALSE
+  )
+  
+  list(
+    variance_components = variance_components,
+    anova_table = NULL,
+    model = fit,
+    method = "reml"
+  )
+}
+
+
+# Confidence Intervals ----
 
 #' Calculate confidence intervals for precision estimates
+#' @noRd
+#' @keywords internal
+#' @param factors Factor column mapping
+#' @param value_col Name of value column
+#' @param method Estimation method ("anova" or "reml")
+#'
+#' @return List with CI for each variance component and precision measure
 #' @noRd
 #' @keywords internal
 .calculate_precision_ci <- function(vc_result, conf_level, ci_method, boot_n,
                                     data, factors, value_col, method) {
   
-  # This will be fully implemented in Phase 1c
-  # For now, return placeholder
+  if (ci_method == "satterthwaite") {
+    ci_result <- .ci_satterthwaite(vc_result, conf_level)
+  } else if (ci_method == "mls") {
+    ci_result <- .ci_mls(vc_result, conf_level)
+  } else if (ci_method == "bootstrap") {
+    ci_result <- .ci_bootstrap(vc_result, conf_level, boot_n,
+                               data, factors, value_col, method)
+  } else {
+    stop("Unknown CI method: ", ci_method, call. = FALSE)
+  }
   
-  # Placeholder structure
+  ci_result
+}
+
+
+# Satterthwaite CI ----
+
+#' Confidence intervals using Satterthwaite approximation
+#'
+#' For a single variance component sigma^2 with df degrees of freedom:
+#'   CI = [df * sigma^2 / chi^2_{alpha/2}, df * sigma^2 / chi^2_{1-alpha/2}]
+#'
+#' For a linear combination L = sum(sigma^2_i):
+#'   df_L = L^2 / sum(sigma^4_i / df_i)
+#'   Then use chi-square CI with df_L
+#'
+#' @noRd
+#' @keywords internal
+.ci_satterthwaite <- function(vc_result, conf_level) {
+  
+  alpha <- 1 - conf_level
+  vc <- vc_result$variance_components
+  
+  # Identify which components are present
+  has_site <- "between_site" %in% vc$component
+  has_run <- "between_run" %in% vc$component
+  has_day <- "between_day" %in% vc$component
+  
+  # Extract variance estimates and degrees of freedom
+  var_error <- vc$variance[vc$component == "error"]
+  df_error <- vc$df[vc$component == "error"]
+  
+  var_day <- if (has_day) vc$variance[vc$component == "between_day"] else 0
+  df_day <- if (has_day) vc$df[vc$component == "between_day"] else 0
+  
+  var_run <- if (has_run) vc$variance[vc$component == "between_run"] else 0
+  df_run <- if (has_run) vc$df[vc$component == "between_run"] else 0
+  
+  var_site <- if (has_site) vc$variance[vc$component == "between_site"] else 0
+  df_site <- if (has_site) vc$df[vc$component == "between_site"] else 0
+  
+  # CI for repeatability (error variance only)
+  repeatability_ci <- .ci_single_variance(var_error, df_error, alpha)
+  
+  # CI for between-day variance
+  between_day_ci <- if (has_day && df_day > 0) {
+    .ci_single_variance(var_day, df_day, alpha)
+  } else {
+    c(lower = NA_real_, upper = NA_real_)
+  }
+  
+  # CI for between-run variance
+  between_run_ci <- if (has_run && df_run > 0) {
+    .ci_single_variance(var_run, df_run, alpha)
+  } else {
+    c(lower = NA_real_, upper = NA_real_)
+  }
+  
+  # CI for between-site variance
+  between_site_ci <- if (has_site && df_site > 0) {
+    .ci_single_variance(var_site, df_site, alpha)
+  } else {
+    c(lower = NA_real_, upper = NA_real_)
+  }
+  
+  # CI for intermediate precision (within-lab)
+  if (has_run) {
+    intermediate_components <- c(var_day, var_run, var_error)
+    intermediate_dfs <- c(df_day, df_run, df_error)
+  } else {
+    intermediate_components <- c(var_day, var_error)
+    intermediate_dfs <- c(df_day, df_error)
+  }
+  intermediate_ci <- .ci_variance_sum(intermediate_components, intermediate_dfs, alpha)
+  
+  # CI for reproducibility (total, including site)
+  if (has_site) {
+    repro_components <- c(var_site, var_day, var_run, var_error)
+    repro_dfs <- c(df_site, df_day, df_run, df_error)
+    reproducibility_ci <- .ci_variance_sum(repro_components, repro_dfs, alpha)
+  } else {
+    reproducibility_ci <- intermediate_ci
+  }
+  
   list(
-    repeatability_ci = c(lower = NA_real_, upper = NA_real_),
-    intermediate_ci = c(lower = NA_real_, upper = NA_real_),
-    reproducibility_ci = c(lower = NA_real_, upper = NA_real_)
+    repeatability = repeatability_ci,
+    between_day = between_day_ci,
+    between_run = between_run_ci,
+    between_site = between_site_ci,
+    intermediate = intermediate_ci,
+    reproducibility = reproducibility_ci,
+    method = "satterthwaite"
   )
+}
+
+
+#' CI for a single variance component using chi-square
+#'
+#' For a variance component with point estimate sigma^2 and df degrees of
+#' freedom, the CI is: [df * sigma^2 / chi^2_{1-alpha/2}, df * sigma^2 / chi^2_{alpha/2}]
+#'
+#' When variance estimate is 0 (constrained from negative), we return
+#' [0, 0] since the point estimate is on the boundary.
+#'
+#' @noRd
+#' @keywords internal
+.ci_single_variance <- function(variance, df, alpha) {
+  
+  if (df <= 0 || !is.finite(df) || !is.finite(variance)) {
+    return(c(lower = NA_real_, upper = NA_real_))
+  }
+  
+  # When variance is 0 (constrained), return [0, 0]
+  # This is a boundary estimate - the true variance could be 0 or small positive
+  if (variance <= 0) {
+    return(c(lower = 0, upper = 0))
+  }
+  
+  chi_lower <- stats::qchisq(1 - alpha / 2, df)
+  chi_upper <- stats::qchisq(alpha / 2, df)
+  
+  ci_lower <- df * variance / chi_lower
+  ci_upper <- df * variance / chi_upper
+  
+  c(lower = ci_lower, upper = ci_upper)
+}
+
+
+#' CI for a sum of variance components using Satterthwaite approximation
+#'
+#' @param variances Vector of variance component estimates
+#' @param dfs Vector of degrees of freedom for each component
+#' @param alpha Significance level (1 - conf_level)
+#'
+#' @noRd
+#' @keywords internal
+.ci_variance_sum <- function(variances, dfs, alpha) {
+  
+  valid <- dfs > 0 & is.finite(variances) & is.finite(dfs)
+  
+  if (sum(valid) == 0) {
+    return(c(lower = NA_real_, upper = NA_real_))
+  }
+  
+  variances <- variances[valid]
+  dfs <- dfs[valid]
+  
+  L <- sum(variances)
+  
+  # When sum of variances is 0 (constrained), return [0, 0]
+  if (L <= 0) {
+    return(c(lower = 0, upper = 0))
+  }
+  
+  # Satterthwaite approximation: df_L = L^2 / sum(sigma^4_i / df_i)
+  denominator <- sum(variances^2 / dfs)
+  
+  if (denominator <= 0 || !is.finite(denominator)) {
+    return(c(lower = NA_real_, upper = NA_real_))
+  }
+  
+  df_satt <- L^2 / denominator
+  
+  chi_lower <- stats::qchisq(1 - alpha / 2, df_satt)
+  chi_upper <- stats::qchisq(alpha / 2, df_satt)
+  
+  ci_lower <- df_satt * L / chi_lower
+  ci_upper <- df_satt * L / chi_upper
+  
+  c(lower = ci_lower, upper = ci_upper)
+}
+
+
+# MLS CI ----
+
+#' Confidence intervals using Modified Large Sample method
+#'
+#' MLS provides better coverage when variance components may be near zero.
+#'
+#' @noRd
+#' @keywords internal
+.ci_mls <- function(vc_result, conf_level) {
+  
+  alpha <- 1 - conf_level
+  vc <- vc_result$variance_components
+  anova <- vc_result$anova_table
+  
+  if (is.null(anova)) {
+    return(.ci_satterthwaite(vc_result, conf_level))
+  }
+  
+  has_site <- "between_site" %in% vc$component
+  has_run <- "between_run" %in% vc$component
+  has_day <- "between_day" %in% vc$component
+  
+  var_error <- vc$variance[vc$component == "error"]
+  df_error <- vc$df[vc$component == "error"]
+  
+  var_day <- if (has_day) vc$variance[vc$component == "between_day"] else 0
+  df_day <- if (has_day) vc$df[vc$component == "between_day"] else 0
+  
+  var_run <- if (has_run) vc$variance[vc$component == "between_run"] else 0
+  df_run <- if (has_run) vc$df[vc$component == "between_run"] else 0
+  
+  var_site <- if (has_site) vc$variance[vc$component == "between_site"] else 0
+  df_site <- if (has_site) vc$df[vc$component == "between_site"] else 0
+  
+  repeatability_ci <- .ci_single_variance(var_error, df_error, alpha)
+  
+  between_day_ci <- if (has_day && df_day > 0) {
+    .ci_mls_single(var_day, df_day, alpha)
+  } else {
+    c(lower = NA_real_, upper = NA_real_)
+  }
+  
+  between_run_ci <- if (has_run && df_run > 0) {
+    .ci_mls_single(var_run, df_run, alpha)
+  } else {
+    c(lower = NA_real_, upper = NA_real_)
+  }
+  
+  between_site_ci <- if (has_site && df_site > 0) {
+    .ci_mls_single(var_site, df_site, alpha)
+  } else {
+    c(lower = NA_real_, upper = NA_real_)
+  }
+  
+  if (has_run) {
+    intermediate_components <- c(var_day, var_run, var_error)
+    intermediate_dfs <- c(df_day, df_run, df_error)
+  } else {
+    intermediate_components <- c(var_day, var_error)
+    intermediate_dfs <- c(df_day, df_error)
+  }
+  intermediate_ci <- .ci_mls_sum(intermediate_components, intermediate_dfs, alpha)
+  
+  if (has_site) {
+    repro_components <- c(var_site, var_day, var_run, var_error)
+    repro_dfs <- c(df_site, df_day, df_run, df_error)
+    reproducibility_ci <- .ci_mls_sum(repro_components, repro_dfs, alpha)
+  } else {
+    reproducibility_ci <- intermediate_ci
+  }
+  
+  list(
+    repeatability = repeatability_ci,
+    between_day = between_day_ci,
+    between_run = between_run_ci,
+    between_site = between_site_ci,
+    intermediate = intermediate_ci,
+    reproducibility = reproducibility_ci,
+    method = "mls"
+  )
+}
+
+
+#' MLS CI for a single variance component
+#'
+#' @noRd
+#' @keywords internal
+.ci_mls_single <- function(variance, df, alpha) {
+  
+  if (df <= 0 || !is.finite(df) || !is.finite(variance)) {
+    return(c(lower = NA_real_, upper = NA_real_))
+  }
+  
+  # When variance is 0 (constrained), return [0, 0]
+  if (variance <= 0) {
+    return(c(lower = 0, upper = 0))
+  }
+  
+  G1 <- 1 - stats::qchisq(alpha / 2, df) / df
+  G2 <- stats::qchisq(1 - alpha / 2, df) / df - 1
+  
+  H1 <- (G1 * variance)^2
+  H2 <- (G2 * variance)^2
+  
+  ci_lower <- max(0, variance - sqrt(H1))
+  ci_upper <- variance + sqrt(H2)
+  
+  c(lower = ci_lower, upper = ci_upper)
+}
+
+
+#' MLS CI for a sum of variance components
+#'
+#' @noRd
+#' @keywords internal
+.ci_mls_sum <- function(variances, dfs, alpha) {
+  
+  valid <- dfs > 0 & is.finite(variances) & is.finite(dfs)
+  
+  if (sum(valid) == 0) {
+    return(c(lower = NA_real_, upper = NA_real_))
+  }
+  
+  variances <- variances[valid]
+  dfs <- dfs[valid]
+  
+  L <- sum(variances)
+  
+  # When sum of variances is 0 (constrained), return [0, 0]
+  if (L <= 0) {
+    return(c(lower = 0, upper = 0))
+  }
+  
+  G1 <- 1 - stats::qchisq(alpha / 2, dfs) / dfs
+  G2 <- stats::qchisq(1 - alpha / 2, dfs) / dfs - 1
+  
+  H1 <- sum((G1 * variances)^2)
+  H2 <- sum((G2 * variances)^2)
+  
+  ci_lower <- max(0, L - sqrt(H1))
+  ci_upper <- L + sqrt(H2)
+  
+  c(lower = ci_lower, upper = ci_upper)
+}
+
+
+# Bootstrap CI ----
+
+#' Confidence intervals using BCa bootstrap
+#'
+#' Resamples the data preserving nested structure and re-estimates
+#' variance components.
+#'
+#' @noRd
+#' @keywords internal
+.ci_bootstrap <- function(vc_result, conf_level, boot_n, data, factors,
+                          value_col, method) {
+  
+  alpha <- 1 - conf_level
+  
+  has_site <- !is.null(factors$site)
+  has_day <- !is.null(factors$day)
+  
+  if (has_site) {
+    resample_col <- factors$site
+  } else if (has_day) {
+    resample_col <- factors$day
+  } else {
+    resample_col <- factors$day
+  }
+  
+  units <- unique(data[[resample_col]])
+  n_units <- length(units)
+  
+  boot_repeatability <- numeric(boot_n)
+  boot_intermediate <- numeric(boot_n)
+  boot_reproducibility <- numeric(boot_n)
+  boot_between_day <- numeric(boot_n)
+  boot_between_run <- numeric(boot_n)
+  boot_between_site <- numeric(boot_n)
+  
+  for (b in seq_len(boot_n)) {
+    boot_units <- sample(units, n_units, replace = TRUE)
+    
+    boot_data <- do.call(rbind, lapply(seq_along(boot_units), function(i) {
+      unit_data <- data[data[[resample_col]] == boot_units[i], , drop = FALSE]
+      unit_data[[resample_col]] <- paste0(unit_data[[resample_col]], "_", i)
+      unit_data
+    }))
+    
+    boot_data <- .prepare_factors(boot_data, factors)
+    
+    tryCatch({
+      if (method == "anova") {
+        vc_boot <- .estimate_vc_anova(boot_data, factors, value_col)
+      } else {
+        vc_boot <- .estimate_vc_reml(boot_data, factors, value_col)
+      }
+      
+      vc_b <- vc_boot$variance_components
+      
+      var_error_b <- vc_b$variance[vc_b$component == "error"]
+      var_day_b <- if ("between_day" %in% vc_b$component) {
+        vc_b$variance[vc_b$component == "between_day"]
+      } else 0
+      var_run_b <- if ("between_run" %in% vc_b$component) {
+        vc_b$variance[vc_b$component == "between_run"]
+      } else 0
+      var_site_b <- if ("between_site" %in% vc_b$component) {
+        vc_b$variance[vc_b$component == "between_site"]
+      } else 0
+      
+      boot_repeatability[b] <- var_error_b
+      boot_between_day[b] <- var_day_b
+      boot_between_run[b] <- var_run_b
+      boot_between_site[b] <- var_site_b
+      boot_intermediate[b] <- var_day_b + var_run_b + var_error_b
+      boot_reproducibility[b] <- var_site_b + var_day_b + var_run_b + var_error_b
+      
+    }, error = function(e) {
+      boot_repeatability[b] <- NA_real_
+      boot_intermediate[b] <- NA_real_
+      boot_reproducibility[b] <- NA_real_
+      boot_between_day[b] <- NA_real_
+      boot_between_run[b] <- NA_real_
+      boot_between_site[b] <- NA_real_
+    })
+  }
+  
+  vc <- vc_result$variance_components
+  
+  var_error_orig <- vc$variance[vc$component == "error"]
+  var_day_orig <- if ("between_day" %in% vc$component) {
+    vc$variance[vc$component == "between_day"]
+  } else 0
+  var_run_orig <- if ("between_run" %in% vc$component) {
+    vc$variance[vc$component == "between_run"]
+  } else 0
+  var_site_orig <- if ("between_site" %in% vc$component) {
+    vc$variance[vc$component == "between_site"]
+  } else 0
+  
+  repeatability_ci <- .bca_precision_ci(boot_repeatability, var_error_orig, alpha)
+  between_day_ci <- .bca_precision_ci(boot_between_day, var_day_orig, alpha)
+  between_run_ci <- .bca_precision_ci(boot_between_run, var_run_orig, alpha)
+  between_site_ci <- .bca_precision_ci(boot_between_site, var_site_orig, alpha)
+  
+  intermediate_orig <- var_day_orig + var_run_orig + var_error_orig
+  intermediate_ci <- .bca_precision_ci(boot_intermediate, intermediate_orig, alpha)
+  
+  reproducibility_orig <- var_site_orig + var_day_orig + var_run_orig + var_error_orig
+  reproducibility_ci <- .bca_precision_ci(boot_reproducibility, reproducibility_orig, alpha)
+  
+  list(
+    repeatability = repeatability_ci,
+    between_day = between_day_ci,
+    between_run = between_run_ci,
+    between_site = between_site_ci,
+    intermediate = intermediate_ci,
+    reproducibility = reproducibility_ci,
+    method = "bootstrap",
+    boot_n = boot_n
+  )
+}
+
+
+#' BCa confidence interval for precision
+#'
+#' @param boot_stat Vector of bootstrap statistics
+#' @param orig_stat Original point estimate
+#' @param alpha Significance level (1 - conf_level)
+#'
+#' @noRd
+#' @keywords internal
+.bca_precision_ci <- function(boot_stat, orig_stat, alpha) {
+  
+  boot_stat <- boot_stat[is.finite(boot_stat)]
+  
+  if (length(boot_stat) < 100) {
+    warning("Too few valid bootstrap samples for reliable CI.", call. = FALSE)
+    return(c(lower = NA_real_, upper = NA_real_))
+  }
+  
+  prop_less <- mean(boot_stat < orig_stat)
+  prop_less <- max(0.001, min(0.999, prop_less))
+  z0 <- stats::qnorm(prop_less)
+  
+  a <- 0  # Simplified (no jackknife acceleration)
+  
+  z_alpha_lower <- stats::qnorm(alpha / 2)
+  z_alpha_upper <- stats::qnorm(1 - alpha / 2)
+  
+  alpha1 <- stats::pnorm(z0 + (z0 + z_alpha_lower) / (1 - a * (z0 + z_alpha_lower)))
+  alpha2 <- stats::pnorm(z0 + (z0 + z_alpha_upper) / (1 - a * (z0 + z_alpha_upper)))
+  
+  alpha1 <- max(0.001, min(0.999, alpha1))
+  alpha2 <- max(0.001, min(0.999, alpha2))
+  
+  ci <- stats::quantile(boot_stat, probs = c(alpha1, alpha2), na.rm = TRUE)
+  
+  ci_lower <- max(0, ci[[1]])
+  ci_upper <- ci[[2]]
+  
+  c(lower = ci_lower, upper = ci_upper)
 }
 
 
 # Precision Summary ----
 
-#' Build precision summary data frame
+#' Build precision summary data frame with confidence intervals
 #' @noRd
 #' @keywords internal
 .build_precision_summary <- function(vc_result, ci_result, grand_mean, factors) {
@@ -1287,64 +1995,440 @@ precision_study <- function(data,
   var_run <- if (has_run) vc$variance[vc$component == "between_run"] else 0
   var_site <- if (has_site) vc$variance[vc$component == "between_site"] else 0
   
-  # Calculate composite precision measures
-  # Repeatability = within-run (error) SD
+  # Calculate composite precision measures (as variances)
   sd_repeatability <- sqrt(var_error)
-  
-  # Intermediate precision (within-lab) = sqrt(var_day + var_run + var_error)
   sd_intermediate <- sqrt(var_day + var_run + var_error)
-  
-  # Reproducibility (total) = sqrt(var_site + var_day + var_run + var_error)
   sd_reproducibility <- sqrt(var_site + var_day + var_run + var_error)
   
-  # Build output
-  measures <- list()
-  sds <- list()
+  # Build output vectors
+  measures <- c()
+  sds <- c()
+  ci_lowers <- c()
+  ci_uppers <- c()
   
-  # Always have repeatability
-  measures$repeatability <- "Repeatability"
-  sds$repeatability <- sd_repeatability
+  # Helper to safely extract CI and convert variance CI to SD CI
+  get_sd_ci <- function(ci_name) {
+    if (!is.null(ci_result[[ci_name]])) {
+      ci_var <- ci_result[[ci_name]]
+      lower <- if (is.finite(ci_var["lower"])) sqrt(max(0, ci_var["lower"])) else NA_real_
+      upper <- if (is.finite(ci_var["upper"])) sqrt(ci_var["upper"]) else NA_real_
+      names(lower) <- names(upper) <- NULL 
+      return(c(lower = lower, upper = upper))
+    }
+    c(lower = NA_real_, upper = NA_real_)
+  }
   
-  # Between-run if present
+  # Repeatability (always present)
+  measures <- c(measures, "Repeatability")
+  sds <- c(sds, sd_repeatability)
+  rep_ci <- get_sd_ci("repeatability")
+  ci_lowers <- c(ci_lowers, rep_ci["lower"])
+  ci_uppers <- c(ci_uppers, rep_ci["upper"])
+  
+  # Between-run (if present)
   if (has_run) {
-    measures$between_run <- "Between-run"
-    sds$between_run <- sqrt(var_run)
+    measures <- c(measures, "Between-run")
+    sds <- c(sds, sqrt(var_run))
+    run_ci <- get_sd_ci("between_run")
+    ci_lowers <- c(ci_lowers, run_ci["lower"])
+    ci_uppers <- c(ci_uppers, run_ci["upper"])
   }
   
   # Between-day
-  measures$between_day <- "Between-day"
-  sds$between_day <- sqrt(var_day)
+  measures <- c(measures, "Between-day")
+  sds <- c(sds, sqrt(var_day))
+  day_ci <- get_sd_ci("between_day")
+  ci_lowers <- c(ci_lowers, day_ci["lower"])
+  ci_uppers <- c(ci_uppers, day_ci["upper"])
   
   # Intermediate precision (within-lab)
-  measures$intermediate <- "Intermediate precision"
-  sds$intermediate <- sd_intermediate
+  measures <- c(measures, "Intermediate precision")
+  sds <- c(sds, sd_intermediate)
+  int_ci <- get_sd_ci("intermediate")
+  ci_lowers <- c(ci_lowers, int_ci["lower"])
+  ci_uppers <- c(ci_uppers, int_ci["upper"])
   
-  # Between-site and reproducibility if multi-site
+  # Between-site and reproducibility (if multi-site)
   if (has_site) {
-    measures$between_site <- "Between-site"
-    sds$between_site <- sqrt(var_site)
+    measures <- c(measures, "Between-site")
+    sds <- c(sds, sqrt(var_site))
+    site_ci <- get_sd_ci("between_site")
+    ci_lowers <- c(ci_lowers, site_ci["lower"])
+    ci_uppers <- c(ci_uppers, site_ci["upper"])
     
-    measures$reproducibility <- "Reproducibility"
-    sds$reproducibility <- sd_reproducibility
+    measures <- c(measures, "Reproducibility")
+    sds <- c(sds, sd_reproducibility)
+    repro_ci <- get_sd_ci("reproducibility")
+    ci_lowers <- c(ci_lowers, repro_ci["lower"])
+    ci_uppers <- c(ci_uppers, repro_ci["upper"])
   }
   
-  # Convert to vectors
-  measure_names <- unlist(measures)
-  sd_values <- unlist(sds)
-  
   # Calculate CVs (as percentage)
-  cv_values <- 100 * sd_values / grand_mean
-  
-  # For now, CIs are placeholders (will be filled in Phase 1c)
-  n_measures <- length(measure_names)
+  cv_values <- 100 * sds / grand_mean
+  cv_ci_lower <- 100 * ci_lowers / grand_mean
+  cv_ci_upper <- 100 * ci_uppers / grand_mean
   
   data.frame(
-    measure = measure_names,
-    sd = sd_values,
+    measure = measures,
+    sd = sds,
     cv_pct = cv_values,
-    ci_lower = rep(NA_real_, n_measures),
-    ci_upper = rep(NA_real_, n_measures),
+    ci_lower = ci_lowers,
+    ci_upper = ci_uppers,
+    cv_ci_lower = cv_ci_lower,
+    cv_ci_upper = cv_ci_upper,
     row.names = NULL,
     stringsAsFactors = FALSE
   )
+}
+
+# S3 Methods ----
+
+#' Print method for precision_study objects
+#'
+#' @description
+#' Displays a concise summary of precision study results, including
+#' variance components and key precision estimates.
+#'
+#' @param x An object of class `precision_study`.
+#' @param digits Number of significant digits to display (default: 3).
+#' @param ... Additional arguments (currently ignored).
+#'
+#' @return Invisibly returns the input object `x`.
+#'
+#' @examples
+#' # Create example data
+#' set.seed(42)
+#' data <- data.frame(
+#'   day = rep(1:5, each = 4),
+#'   value = rnorm(20, mean = 100, sd = 5)
+#' )
+#' data$value <- data$value + rep(rnorm(5, 0, 3), each = 4)
+#'
+#' prec <- precision_study(data, value = "value", day = "day")
+#' print(prec)
+#'
+#' @seealso [summary.precision_study()] for detailed output
+#' @export
+print.precision_study <- function(x, digits = 3, ...) {
+  
+  cat("\n")
+  cat("Precision Study Analysis\n")
+  cat(strrep("-", 45), "\n")
+  
+  # Sample info
+  cat(sprintf("n = %d observations", x$input$n))
+  if (x$input$n_excluded > 0) {
+    cat(sprintf(" (%d excluded due to NAs)", x$input$n_excluded))
+  }
+  
+  cat("\n")
+  
+  # Design info
+  cat(sprintf("Design: %s", x$design$structure))
+  if (!x$design$balanced) {
+    cat(" (unbalanced)")
+  }
+  cat("\n")
+  
+  # Method info
+  method_str <- if (x$settings$method == "anova") "ANOVA (Method of Moments)" else "REML"
+  cat(sprintf("Estimation: %s\n", method_str))
+  
+  ci_str <- switch(x$settings$ci_method,
+                   satterthwaite = "Satterthwaite",
+                   mls = "Modified Large Sample",
+                   bootstrap = sprintf("Bootstrap (n = %d)", x$settings$boot_n))
+  cat(sprintf("CI method: %s, %s%% CI\n", ci_str, x$settings$conf_level * 100))
+  cat("\n")
+  
+  # Multi-sample info
+  if (!is.null(x$by_sample) && length(x$by_sample) > 1) {
+    cat(sprintf("Samples: %d concentration levels\n", length(x$by_sample)))
+    cat("(Showing results for first sample; use $by_sample for all)\n\n")
+  }
+  
+  # Precision estimates
+  cat("Precision Estimates:\n")
+  cat(strrep("-", 45), "\n")
+  
+  prec <- x$precision
+  ci_pct <- sprintf("%g%%", x$settings$conf_level * 100)
+  
+  # Format precision table
+  for (i in seq_len(nrow(prec))) {
+    measure <- prec$measure[i]
+    sd_val <- format(round(prec$sd[i], digits), nsmall = digits)
+    cv_val <- format(round(prec$cv_pct[i], 2), nsmall = 2)
+    
+    # Format CI
+    if (!is.na(prec$ci_lower[i]) && !is.na(prec$ci_upper[i])) {
+      ci_str <- sprintf("[%s, %s]",
+                        format(round(prec$ci_lower[i], digits), nsmall = digits),
+                        format(round(prec$ci_upper[i], digits), nsmall = digits))
+    } else {
+      ci_str <- "[NA, NA]"
+    }
+    
+    cat(sprintf("  %-20s SD = %s  (CV = %s%%)\n", 
+                paste0(measure, ":"), sd_val, cv_val))
+    cat(sprintf("  %-20s %s CI: %s\n", "", ci_pct, ci_str))
+  }
+  
+  cat("\n")
+  
+  invisible(x)
+}
+
+
+#' Summary method for precision_study objects
+#'
+#' @description
+#' Provides a detailed summary of precision study results, including
+#' variance components, ANOVA table (for ANOVA method), precision estimates
+#' with confidence intervals, and design information.
+#'
+#' @param object An object of class `precision_study`.
+#' @param ... Additional arguments (currently ignored).
+#'
+#' @return An object of class `summary.precision_study` containing:
+#'   \describe{
+#'     \item{call}{The original function call.}
+#'     \item{n}{Number of observations.}
+#'     \item{n_excluded}{Number of observations excluded due to NAs.}
+#'     \item{design}{Design information list.}
+#'     \item{settings}{Analysis settings.}
+#'     \item{variance_components}{Data frame of variance components.}
+#'     \item{precision}{Data frame of precision estimates.}
+#'     \item{anova_table}{ANOVA table (if method = "anova").}
+#'     \item{by_sample}{Results by sample (if multiple samples).}
+#'   }
+#'
+#' @examples
+#' # Create example data
+#' set.seed(42)
+#' data <- data.frame(
+#'   day = rep(1:5, each = 4),
+#'   value = rnorm(20, mean = 100, sd = 5)
+#' )
+#' data$value <- data$value + rep(rnorm(5, 0, 3), each = 4)
+#'
+#' prec <- precision_study(data, value = "value", day = "day")
+#' summary(prec)
+#'
+#' @seealso [print.precision_study()] for concise output
+#' @export
+summary.precision_study <- function(object, ...) {
+  
+  structure(
+    list(
+      call = object$call,
+      n = object$input$n,
+      n_excluded = object$input$n_excluded,
+      factors = object$input$factors,
+      design = object$design,
+      settings = object$settings,
+      variance_components = object$variance_components,
+      precision = object$precision,
+      anova_table = object$anova_table,
+      by_sample = object$by_sample,
+      sample_means = object$sample_means
+    ),
+    class = "summary.precision_study"
+  )
+}
+
+
+#' Print method for summary.precision_study objects
+#'
+#' @param x An object of class `summary.precision_study`.
+#' @param digits Number of significant digits to display (default: 4).
+#' @param ... Additional arguments (currently ignored).
+#'
+#' @return Invisibly returns the input object `x`.
+#'
+#' @export
+print.summary.precision_study <- function(x, digits = 4, ...) {
+  
+  cat("\n")
+  cat("Precision Study Analysis - Detailed Summary\n")
+  cat(strrep("=", 55), "\n\n")
+  
+  # Call
+  cat("Call:\n")
+  print(x$call)
+  cat("\n")
+  
+  # Design Information
+  cat(strrep("-", 55), "\n")
+  cat("Design Information:\n")
+  cat(strrep("-", 55), "\n")
+  
+  cat(sprintf("  Structure: %s\n", x$design$structure))
+  cat(sprintf("  Type: %s\n", x$design$type))
+  cat(sprintf("  Balanced: %s\n", if (x$design$balanced) "Yes" else "No"))
+  
+  # Factor levels
+  cat("  Factor levels:\n")
+  for (fname in names(x$design$levels)) {
+    cat(sprintf("    %s: %d\n", fname, x$design$levels[[fname]]))
+  }
+  cat("\n")
+  
+  # Sample info
+  cat(sprintf("  Total observations: %d\n", x$n))
+  if (x$n_excluded > 0) {
+    cat(sprintf("  Excluded (NA): %d\n", x$n_excluded))
+  }
+  cat("\n")
+  
+  # Settings
+  cat(strrep("-", 55), "\n")
+  cat("Analysis Settings:\n")
+  cat(strrep("-", 55), "\n")
+  
+  method_str <- if (x$settings$method == "anova") {
+    "ANOVA (Method of Moments)"
+  } else {
+    "REML (Restricted Maximum Likelihood)"
+  }
+  cat(sprintf("  Estimation method: %s\n", method_str))
+  
+  ci_str <- switch(x$settings$ci_method,
+                   satterthwaite = "Satterthwaite approximation",
+                   mls = "Modified Large Sample (MLS)",
+                   bootstrap = sprintf("Bootstrap BCa (n = %d)", x$settings$boot_n))
+  cat(sprintf("  CI method: %s\n", ci_str))
+  cat(sprintf("  Confidence level: %g%%\n", x$settings$conf_level * 100))
+  cat("\n")
+  
+  # Variance Components
+  cat(strrep("-", 55), "\n")
+  cat("Variance Components:\n")
+  cat(strrep("-", 55), "\n")
+  
+  vc <- x$variance_components
+  vc_display <- data.frame(
+    Component = vc$component,
+    Variance = round(vc$variance, digits),
+    SD = round(vc$sd, digits),
+    `Pct Total` = round(vc$pct_total, 1),
+    df = vc$df,
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+  print(vc_display, row.names = FALSE, right = FALSE)
+  cat("\n")
+  
+  # ANOVA Table (if available)
+  if (!is.null(x$anova_table)) {
+    cat(strrep("-", 55), "\n")
+    cat("ANOVA Table:\n")
+    cat(strrep("-", 55), "\n")
+    
+    aov_tbl <- x$anova_table
+    aov_display <- data.frame(
+      Source = aov_tbl$source,
+      df = aov_tbl$df,
+      SS = round(aov_tbl$ss, digits),
+      MS = round(aov_tbl$ms, digits),
+      check.names = FALSE,
+      stringsAsFactors = FALSE
+    )
+    print(aov_display, row.names = FALSE, right = FALSE)
+    cat("\n")
+  }
+  
+  # Precision Estimates
+  cat(strrep("-", 55), "\n")
+  cat("Precision Estimates:\n")
+  cat(strrep("-", 55), "\n")
+  
+  prec <- x$precision
+  ci_pct <- sprintf("%g%%", x$settings$conf_level * 100)
+  
+  prec_display <- data.frame(
+    Measure = prec$measure,
+    SD = round(prec$sd, digits),
+    `CV (%)` = round(prec$cv_pct, 2),
+    `CI Lower` = round(prec$ci_lower, digits),
+    `CI Upper` = round(prec$ci_upper, digits),
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+  names(prec_display)[4:5] <- c(paste0(ci_pct, " Lower"), paste0(ci_pct, " Upper"))
+  print(prec_display, row.names = FALSE, right = FALSE)
+  cat("\n")
+  
+  # Multi-sample results
+  if (!is.null(x$by_sample) && length(x$by_sample) > 1) {
+    cat(strrep("-", 55), "\n")
+    cat("Results by Sample:\n")
+    cat(strrep("-", 55), "\n")
+    
+    sample_names <- names(x$by_sample)
+    for (i in seq_along(x$by_sample)) {
+      samp <- x$by_sample[[i]]
+      samp_name <- sample_names[i]
+      samp_mean <- if (!is.null(x$sample_means)) {
+        round(x$sample_means[samp_name], digits)
+      } else {
+        NA
+      }
+      
+      cat(sprintf("\n  Sample: %s", samp_name))
+      if (!is.na(samp_mean)) {
+        cat(sprintf(" (mean = %s)", samp_mean))
+      }
+      cat("\n")
+      
+      # Show key precision metrics for each sample
+      sp <- samp$precision
+      repeat_idx <- which(sp$measure == "Repeatability")
+      if (length(repeat_idx) > 0) {
+        cat(sprintf("    Repeatability:  SD = %s, CV = %s%%\n",
+                    round(sp$sd[repeat_idx], digits),
+                    round(sp$cv_pct[repeat_idx], 2)))
+      }
+      
+      # Intermediate precision (look for various names)
+      inter_idx <- which(grepl("Intermediate|Within-laboratory", sp$measure, 
+                               ignore.case = TRUE))
+      if (length(inter_idx) > 0) {
+        cat(sprintf("    Intermediate:   SD = %s, CV = %s%%\n",
+                    round(sp$sd[inter_idx[1]], digits),
+                    round(sp$cv_pct[inter_idx[1]], 2)))
+      }
+    }
+    cat("\n")
+  }
+  
+  # Interpretation guidance
+  cat(strrep("-", 55), "\n")
+  cat("Interpretation:\n")
+  cat(strrep("-", 55), "\n")
+  
+  # Get repeatability and intermediate precision
+  prec <- x$precision
+  repeat_cv <- prec$cv_pct[prec$measure == "Repeatability"]
+  inter_idx <- which(grepl("Intermediate|Within-laboratory", prec$measure, 
+                           ignore.case = TRUE))
+  inter_cv <- if (length(inter_idx) > 0) prec$cv_pct[inter_idx[1]] else NA
+  
+  cat(sprintf("  Repeatability CV: %s%%\n", round(repeat_cv, 2)))
+  if (!is.na(inter_cv)) {
+    cat(sprintf("  Intermediate precision CV: %s%%\n", round(inter_cv, 2)))
+    
+    # Ratio interpretation
+    if (repeat_cv > 0) {
+      ratio <- inter_cv / repeat_cv
+      cat(sprintf("  Ratio (intermediate/repeatability): %.2f\n", ratio))
+      if (ratio > 1.5) {
+        cat("  Note: Substantial between-day/run variation detected.\n")
+      }
+    }
+  }
+  
+  cat("\n")
+  
+  invisible(x)
 }

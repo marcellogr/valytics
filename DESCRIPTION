@@ -1,6 +1,6 @@
 Package: valytics
 Title: Statistical Methods for Analytical Method Comparison and Validation
-Version: 0.3.0
+Version: 0.4.0
 Authors@R: 
     person("Marcello", "Grassi", , "marcello.grassi@tum.de", 
            role = c("aut", "cre"),
@@ -26,10 +26,12 @@ Depends:
 Imports: 
     ggplot2,
     robslopes
+	stats
 Suggests: 
     testthat (>= 3.0.0),
     knitr (>= 1.43),
-    rmarkdown (>= 2.22)
+    rmarkdown (>= 2.22),
+	lme4 (>= 1.1-33)
 Config/testthat/edition: 3
 URL: https://github.com/marcellogr/valytics
 BugReports: https://github.com/marcellogr/valytics/issues
