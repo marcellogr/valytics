@@ -204,7 +204,7 @@ precision_study <- function(data,
 
 
   # Capture the call
-
+  
   call <- match.call()
 
   # Match arguments
@@ -213,15 +213,15 @@ precision_study <- function(data,
   method <- match.arg(method)
 
   # Check REML availability
-
-if (method == "reml") {
+  
+  if (method == "reml") {
     if (!requireNamespace("lme4", quietly = TRUE)) {
       stop("Package 'lme4' is required for REML estimation. ",
            "Install it with install.packages('lme4') or use method = 'anova'.",
            call. = FALSE)
     }
   }
-
+  
   # Input validation ----
   validated <- .validate_precision_input(
     data = data,
@@ -234,30 +234,30 @@ if (method == "reml") {
     conf_level = conf_level,
     boot_n = boot_n
   )
-
+  
   data_clean <- validated$data
   factors <- validated$factors
   n_excluded <- validated$n_excluded
-
+  
   # Design detection ----
   design <- .detect_precision_design(data_clean, factors)
-
+  
   # Convert factors to proper factor type for analysis
   data_clean <- .prepare_factors(data_clean, factors)
-
+  
   # Check for multiple samples ----
   if (!is.null(factors$sample)) {
     # Analyze each sample separately, then combine
     samples <- unique(data_clean[[factors$sample]])
     n_samples <- length(samples)
-
+    
     results_by_sample <- lapply(samples, function(s) {
       sample_data <- data_clean[data_clean[[factors$sample]] == s, ]
       sample_factors <- factors
       sample_factors$sample <- NULL  # Remove sample from nested structure
-
+      
       sample_design <- .detect_precision_design(sample_data, sample_factors)
-
+      
       .compute_precision_single(
         data = sample_data,
         factors = sample_factors,
@@ -270,17 +270,17 @@ if (method == "reml") {
       )
     })
     names(results_by_sample) <- as.character(samples)
-
+    
     # Get overall mean for CV calculation
     overall_means <- sapply(samples, function(s) {
       mean(data_clean[[value]][data_clean[[factors$sample]] == s], na.rm = TRUE)
     })
     names(overall_means) <- as.character(samples)
-
+    
     # Use first sample's structure for main results (typical case)
     # Users can access by_sample for individual results
     main_result <- results_by_sample[[1]]
-
+    
     result <- list(
       input = list(
         data = data_clean,
@@ -303,7 +303,7 @@ if (method == "reml") {
       ),
       call = call
     )
-
+    
   } else {
     # Single sample analysis
     computed <- .compute_precision_single(
@@ -316,7 +316,7 @@ if (method == "reml") {
       method = method,
       value_col = value
     )
-
+    
     result <- list(
       input = list(
         data = data_clean,
@@ -340,10 +340,11 @@ if (method == "reml") {
       call = call
     )
   }
-
+  
   class(result) <- c("precision_study", "valytics_precision", "valytics_result")
   result
 }
+
 
 # Input Validation ----
 
@@ -351,29 +352,29 @@ if (method == "reml") {
 #' @noRd
 #' @keywords internal
 .validate_precision_input <- function(data, value, sample, site, day, run,
-                                       replicate, conf_level, boot_n) {
-
- # Check data is a data frame
+                                      replicate, conf_level, boot_n) {
+  
+  # Check data is a data frame
   if (!is.data.frame(data)) {
     stop("`data` must be a data frame.", call. = FALSE)
   }
-
+  
   if (nrow(data) == 0) {
     stop("`data` cannot be empty.", call. = FALSE)
   }
-
+  
   # Check value column exists and is numeric
   if (!value %in% names(data)) {
     stop(sprintf("Column '%s' not found in data.", value), call. = FALSE)
   }
-
+  
   if (!is.numeric(data[[value]])) {
     stop(sprintf("Column '%s' must be numeric.", value), call. = FALSE)
   }
-
+  
   # Build factors list (only non-NULL factors)
   factors <- list()
-
+  
   # Check each factor column
   factor_specs <- list(
     sample = sample,
@@ -382,7 +383,7 @@ if (method == "reml") {
     run = run,
     replicate = replicate
   )
-
+  
   for (fname in names(factor_specs)) {
     fcol <- factor_specs[[fname]]
     if (!is.null(fcol)) {
@@ -393,41 +394,41 @@ if (method == "reml") {
       factors[[fname]] <- fcol
     }
   }
-
+  
   # Must have at least day factor
   if (is.null(factors$day)) {
     stop("At least 'day' factor must be specified.", call. = FALSE)
   }
-
+  
   # Validate conf_level
   if (!is.numeric(conf_level) || length(conf_level) != 1 ||
       conf_level <= 0 || conf_level >= 1) {
     stop("`conf_level` must be a single number between 0 and 1.", call. = FALSE)
   }
-
+  
   # Validate boot_n
   if (!is.numeric(boot_n) || length(boot_n) != 1 ||
       boot_n < 100 || boot_n != floor(boot_n)) {
     stop("`boot_n` must be an integer >= 100.", call. = FALSE)
   }
-
+  
   # Handle missing values
   # Identify columns to check for NA
   cols_to_check <- c(value, unlist(factors))
   complete_rows <- complete.cases(data[, cols_to_check, drop = FALSE])
   n_excluded <- sum(!complete_rows)
-
+  
   if (n_excluded > 0) {
     message(sprintf("Note: %d observations excluded due to missing values.",
                     n_excluded))
   }
-
+  
   data_clean <- data[complete_rows, , drop = FALSE]
-
+  
   if (nrow(data_clean) < 3) {
     stop("At least 3 complete observations are required.", call. = FALSE)
   }
-
+  
   list(
     data = data_clean,
     factors = factors,
@@ -441,34 +442,34 @@ if (method == "reml") {
 #' @noRd
 #' @keywords internal
 .detect_precision_design <- function(data, factors) {
-
+  
   # Determine design type based on factors present
   has_site <- !is.null(factors$site)
   has_day <- !is.null(factors$day)
   has_run <- !is.null(factors$run)
   has_replicate <- !is.null(factors$replicate)
-
+  
   # Design type
   if (has_site) {
     design_type <- "multi_site"
   } else {
     design_type <- "single_site"
   }
-
+  
   # Build structure string (nesting hierarchy)
   structure_parts <- c()
   if (has_site) structure_parts <- c(structure_parts, "site")
   if (has_day) structure_parts <- c(structure_parts, "day")
   if (has_run) structure_parts <- c(structure_parts, "run")
   if (has_replicate) structure_parts <- c(structure_parts, "replicate")
-
+  
   # If no explicit replicate column, replicates are inferred
   if (!has_replicate) {
     structure_parts <- c(structure_parts, "replicate (inferred)")
   }
-
+  
   structure_string <- paste(structure_parts, collapse = "/")
-
+  
   # Count levels for each factor
   levels_list <- list()
   for (fname in names(factors)) {
@@ -477,7 +478,7 @@ if (method == "reml") {
       levels_list[[fname]] <- length(unique(data[[fcol]]))
     }
   }
-
+  
   # Determine number of replicates (inferred if not explicit)
   if (!has_replicate) {
     # Count observations per lowest grouping
@@ -485,7 +486,7 @@ if (method == "reml") {
     if (has_site) grouping_cols <- c(grouping_cols, factors$site)
     if (has_day) grouping_cols <- c(grouping_cols, factors$day)
     if (has_run) grouping_cols <- c(grouping_cols, factors$run)
-
+    
     if (length(grouping_cols) > 0) {
       counts <- aggregate(
         rep(1, nrow(data)),
@@ -498,20 +499,20 @@ if (method == "reml") {
       levels_list$replicate <- nrow(data)
     }
   }
-
+  
   # Check if design is balanced
   balanced <- .check_balance(data, factors)
-
+  
   # Number of samples (concentration levels)
   if (!is.null(factors$sample)) {
     n_samples <- length(unique(data[[factors$sample]]))
   } else {
     n_samples <- 1
   }
-
+  
   # Describe design in human-readable format
   design_desc <- .describe_design(levels_list, design_type)
-
+  
   list(
     type = design_type,
     structure = structure_string,
@@ -527,36 +528,36 @@ if (method == "reml") {
 #' @noRd
 #' @keywords internal
 .check_balance <- function(data, factors) {
-
+  
   # Get nesting factors (exclude sample)
   nesting_factors <- factors[!names(factors) %in% c("sample", "replicate")]
-
+  
   if (length(nesting_factors) == 0) {
     return(TRUE)  # No nesting = balanced by default
-}
-
+  }
+  
   # Check counts at each level of nesting
   # For a balanced design, all groups should have equal counts
-
+  
   # Start from the highest level and check down
   factor_names <- names(nesting_factors)
-
+  
   for (i in seq_along(factor_names)) {
     # Group by factors up to this level
     group_cols <- unlist(nesting_factors[1:i])
-
+    
     counts <- aggregate(
       rep(1, nrow(data)),
       by = data[, group_cols, drop = FALSE],
       FUN = length
     )
-
+    
     # Check if all counts are equal
     if (length(unique(counts$x)) > 1) {
       return(FALSE)
     }
   }
-
+  
   TRUE
 }
 
@@ -565,21 +566,21 @@ if (method == "reml") {
 #' @noRd
 #' @keywords internal
 .describe_design <- function(levels_list, design_type) {
-
+  
   parts <- c()
-
+  
   if ("site" %in% names(levels_list)) {
     parts <- c(parts, sprintf("%d sites", levels_list$site))
   }
-
+  
   if ("day" %in% names(levels_list)) {
     parts <- c(parts, sprintf("%d days", levels_list$day))
   }
-
+  
   if ("run" %in% names(levels_list)) {
     parts <- c(parts, sprintf("%d runs/day", levels_list$run))
   }
-
+  
   if ("replicate" %in% names(levels_list)) {
     rep_val <- levels_list$replicate
     if (is.numeric(rep_val)) {
@@ -588,11 +589,11 @@ if (method == "reml") {
       parts <- c(parts, "varying replicates")
     }
   }
-
+  
   if (length(parts) == 0) {
     return("Unknown design")
   }
-
+  
   paste(parts, collapse = " x ")
 }
 
@@ -601,36 +602,36 @@ if (method == "reml") {
 #' @noRd
 #' @keywords internal
 .prepare_factors <- function(data, factors) {
-
+  
   for (fname in names(factors)) {
     fcol <- factors[[fname]]
     if (!is.factor(data[[fcol]])) {
       data[[fcol]] <- as.factor(data[[fcol]])
     }
   }
-
+  
   data
 }
 
 
-# Core Computation (Placeholder - to be implemented in Phase 1b) ----
+# Core Computation ----
 
 #' Compute precision for a single sample
 #' @noRd
 #' @keywords internal
 .compute_precision_single <- function(data, factors, design, conf_level,
-                                       ci_method, boot_n, method, value_col) {
-
+                                      ci_method, boot_n, method, value_col) {
+  
   # Get the mean for CV calculation
   grand_mean <- mean(data[[value_col]], na.rm = TRUE)
-
+  
   # Dispatch to appropriate estimation method
   if (method == "anova") {
     vc_result <- .estimate_vc_anova(data, factors, value_col)
   } else {
     vc_result <- .estimate_vc_reml(data, factors, value_col)
   }
-
+  
   # Calculate confidence intervals
   ci_result <- .calculate_precision_ci(
     vc_result = vc_result,
@@ -642,7 +643,7 @@ if (method == "reml") {
     value_col = value_col,
     method = method
   )
-
+  
   # Build precision summary
   precision <- .build_precision_summary(
     vc_result = vc_result,
@@ -650,63 +651,589 @@ if (method == "reml") {
     grand_mean = grand_mean,
     factors = factors
   )
-
+  
   list(
     variance_components = vc_result$variance_components,
     precision = precision,
-    anova_table = vc_result$anova_table
+    anova_table = vc_result$anova_table,
+    grand_mean = grand_mean
   )
 }
 
 
+# ANOVA Variance Component Estimation ----
+
 #' Estimate variance components using ANOVA method
+#'
+#' Uses nested ANOVA (Type I SS) to estimate variance components via
+#' method of moments. Supports hierarchies: site/day/run/replicate.
+#'
 #' @noRd
 #' @keywords internal
 .estimate_vc_anova <- function(data, factors, value_col) {
+  
+  n <- nrow(data)
+  grand_mean <- mean(data[[value_col]], na.rm = TRUE)
+  
+  # Determine which factors are present
+  
+  has_site <- !is.null(factors$site)
+  has_day <- !is.null(factors$day)
+  
+  has_run <- !is.null(factors$run)
+  
+  # Build the appropriate ANOVA based on available factors
+  if (has_site && has_day && has_run) {
+    # Full model: site/day/run/replicate
+    result <- .anova_site_day_run(data, factors, value_col)
+  } else if (has_site && has_day && !has_run) {
+    # site/day/replicate (no run)
+    result <- .anova_site_day(data, factors, value_col)
+  } else if (!has_site && has_day && has_run) {
+    # day/run/replicate (single site)
+    result <- .anova_day_run(data, factors, value_col)
+  } else if (!has_site && has_day && !has_run) {
+    # day/replicate only (simplest case)
+    result <- .anova_day_only(data, factors, value_col)
+  } else {
+    stop("Unsupported factor combination.", call. = FALSE)
+  }
+  
+  result$grand_mean <- grand_mean
+  result
+}
 
-  # This will be fully implemented in Phase 1b
-  # For now, return placeholder structure
 
-  # Build formula for nested ANOVA
-  # Hierarchy: site > day > run > replicate (error)
-
-  # Placeholder - actual implementation coming in Phase 1b
-  warning("ANOVA estimation not yet implemented. Returning placeholder.",
-          call. = FALSE)
-
-  # Return structure that matches expected output
+#' ANOVA for day-only design (day/replicate)
+#'
+#' Model: y_ij = mu + D_i + e_ij
+#' @noRd
+#' @keywords internal
+.anova_day_only <- function(data, factors, value_col) {
+  
+  y <- data[[value_col]]
+  day <- data[[factors$day]]
+  
+  n <- length(y)
+  n_days <- length(unique(day))
+  
+  # Calculate group sizes
+  n_per_day <- as.numeric(table(day))
+  
+  # Grand mean
+  grand_mean <- mean(y)
+  
+  # Day means
+  day_means <- tapply(y, day, mean)
+  
+  # Sum of Squares
+  # SS_total = sum((y - grand_mean)^2)
+  ss_total <- sum((y - grand_mean)^2)
+  
+  # SS_day = sum(n_i * (day_mean_i - grand_mean)^2)
+  ss_day <- sum(n_per_day * (day_means - grand_mean)^2)
+  
+  # SS_error = SS_total - SS_day
+  ss_error <- ss_total - ss_day
+  
+  # Degrees of freedom
+  df_day <- n_days - 1
+  df_error <- n - n_days
+  df_total <- n - 1
+  
+  # Mean Squares
+  ms_day <- ss_day / df_day
+  ms_error <- ss_error / df_error
+  
+  # Variance components (Method of Moments)
+  # E[MS_day] = sigma^2_error + n_0 * sigma^2_day
+  # E[MS_error] = sigma^2_error
+  # where n_0 is the harmonic-like mean of group sizes for unbalanced designs
+  
+  # For balanced: n_0 = n_per_day (all equal)
+  # For unbalanced: n_0 = (n - sum(n_i^2)/n) / (a - 1)
+  if (length(unique(n_per_day)) == 1) {
+    n_0 <- n_per_day[1]
+  } else {
+    n_0 <- (n - sum(n_per_day^2) / n) / (n_days - 1)
+  }
+  
+  var_error <- ms_error
+  var_day <- (ms_day - ms_error) / n_0
+  
+  # Handle negative variance estimates (set to 0)
+  var_day <- max(0, var_day)
+  
+  var_total <- var_day + var_error
+  
+  # Build variance components table
+  variance_components <- data.frame(
+    component = c("between_day", "error", "total"),
+    variance = c(var_day, var_error, var_total),
+    sd = c(sqrt(var_day), sqrt(var_error), sqrt(var_total)),
+    pct_total = c(
+      100 * var_day / var_total,
+      100 * var_error / var_total,
+      100
+    ),
+    df = c(df_day, df_error, df_total),
+    stringsAsFactors = FALSE
+  )
+  
+  # Build ANOVA table
+  anova_table <- data.frame(
+    source = c("day", "error", "total"),
+    df = c(df_day, df_error, df_total),
+    ss = c(ss_day, ss_error, ss_total),
+    ms = c(ms_day, ms_error, NA_real_),
+    stringsAsFactors = FALSE
+  )
+  
   list(
-    variance_components = data.frame(
-      component = c("day", "run", "error", "total"),
-      variance = c(NA_real_, NA_real_, NA_real_, NA_real_),
-      sd = c(NA_real_, NA_real_, NA_real_, NA_real_),
-      pct_total = c(NA_real_, NA_real_, NA_real_, 100),
-      df = c(NA_real_, NA_real_, NA_real_, NA_real_),
-      stringsAsFactors = FALSE
-    ),
-    anova_table = data.frame(
-      source = character(0),
-      df = numeric(0),
-      ss = numeric(0),
-      ms = numeric(0),
-      stringsAsFactors = FALSE
-    ),
-    grand_mean = mean(data[[value_col]], na.rm = TRUE)
+    variance_components = variance_components,
+    anova_table = anova_table,
+    n_0 = n_0
   )
 }
 
+
+#' ANOVA for day/run design (day/run/replicate)
+#'
+#' Model: y_ijk = mu + D_i + R_j(i) + e_ijk
+#' Run is nested within day.
+#' @noRd
+#' @keywords internal
+.anova_day_run <- function(data, factors, value_col) {
+  
+  y <- data[[value_col]]
+  day <- data[[factors$day]]
+  run <- data[[factors$run]]
+  
+  n <- length(y)
+  n_days <- length(unique(day))
+  
+  # Create day:run interaction for nested structure
+  day_run <- interaction(day, run, drop = TRUE)
+  n_cells <- length(unique(day_run))
+  
+  # Grand mean
+  grand_mean <- mean(y)
+  
+  # Day means
+  day_means <- tapply(y, day, mean)
+  n_per_day <- as.numeric(table(day))
+  
+  # Cell (day:run) means
+  cell_means <- tapply(y, day_run, mean)
+  n_per_cell <- as.numeric(table(day_run))
+  
+  # Sum of Squares
+  ss_total <- sum((y - grand_mean)^2)
+  
+  # SS_day
+  ss_day <- sum(n_per_day * (day_means - grand_mean)^2)
+  
+  # SS_run(day) = SS_cells - SS_day
+  # where SS_cells = sum(n_ij * (cell_mean_ij - grand_mean)^2)
+  ss_cells <- sum(n_per_cell * (cell_means - grand_mean)^2)
+  ss_run <- ss_cells - ss_day
+  
+  # SS_error
+  ss_error <- ss_total - ss_cells
+  
+  # Degrees of freedom
+  df_day <- n_days - 1
+  df_run <- n_cells - n_days  # runs nested in days
+  
+  df_error <- n - n_cells
+  df_total <- n - 1
+  
+  # Mean Squares
+  ms_day <- ss_day / df_day
+  ms_run <- if (df_run > 0) ss_run / df_run else 0
+  ms_error <- if (df_error > 0) ss_error / df_error else 0
+  
+  # Expected Mean Squares coefficients for unbalanced designs
+  # For balanced: straightforward
+  # For unbalanced: use synthesis coefficients
+  
+  # Calculate n_0 coefficients
+  # These depend on the design balance
+  design_info <- .get_design_coefficients_day_run(data, factors)
+  
+  # Variance components (Method of Moments)
+  # E[MS_error] = sigma^2_e
+  # E[MS_run] = sigma^2_e + n_r * sigma^2_run
+  # E[MS_day] = sigma^2_e + n_r * sigma^2_run + n_d * sigma^2_day
+  
+  var_error <- ms_error
+  var_run <- if (design_info$n_r > 0) (ms_run - ms_error) / design_info$n_r else 0
+  var_day <- if (design_info$n_d > 0) {
+    (ms_day - ms_run) / design_info$n_d
+  } else {
+    0
+  }
+  
+  # Handle negative variance estimates
+  var_run <- max(0, var_run)
+  var_day <- max(0, var_day)
+  
+  var_total <- var_day + var_run + var_error
+  
+  # Build variance components table
+  variance_components <- data.frame(
+    component = c("between_day", "between_run", "error", "total"),
+    variance = c(var_day, var_run, var_error, var_total),
+    sd = c(sqrt(var_day), sqrt(var_run), sqrt(var_error), sqrt(var_total)),
+    pct_total = c(
+      100 * var_day / var_total,
+      100 * var_run / var_total,
+      100 * var_error / var_total,
+      100
+    ),
+    df = c(df_day, df_run, df_error, df_total),
+    stringsAsFactors = FALSE
+  )
+  
+  # Build ANOVA table
+  anova_table <- data.frame(
+    source = c("day", "run(day)", "error", "total"),
+    df = c(df_day, df_run, df_error, df_total),
+    ss = c(ss_day, ss_run, ss_error, ss_total),
+    ms = c(ms_day, ms_run, ms_error, NA_real_),
+    stringsAsFactors = FALSE
+  )
+  
+  list(
+    variance_components = variance_components,
+    anova_table = anova_table,
+    coefficients = design_info
+  )
+}
+
+
+#' Calculate EMS coefficients for day/run design
+#' @noRd
+#' @keywords internal
+.get_design_coefficients_day_run <- function(data, factors) {
+  
+  day <- data[[factors$day]]
+  run <- data[[factors$run]]
+  day_run <- interaction(day, run, drop = TRUE)
+  
+  n <- nrow(data)
+  n_days <- length(unique(day))
+  n_cells <- length(unique(day_run))
+  
+  # Group sizes
+  n_per_day <- as.numeric(table(day))
+  n_per_cell <- as.numeric(table(day_run))
+  
+  # Runs per day
+  runs_per_day <- tapply(run, day, function(x) length(unique(x)))
+  
+  # For balanced design: n_r = replicates per cell, n_d = reps * runs
+  if (length(unique(n_per_cell)) == 1 && length(unique(runs_per_day)) == 1) {
+    # Balanced
+    n_r <- n_per_cell[1]  # replicates per run
+    n_d <- n_r * runs_per_day[1]  # replicates per day
+  } else {
+    # Unbalanced - use harmonic-like means
+    # n_r for run effect
+    n_r <- (n - sum(n_per_cell^2) / n) / (n_cells - n_days)
+    if (!is.finite(n_r) || n_r <= 0) n_r <- mean(n_per_cell)
+    
+    # n_d for day effect
+    # More complex for unbalanced - approximate
+    n_d <- mean(n_per_day)
+  }
+  
+  list(n_r = n_r, n_d = n_d)
+}
+
+
+#' ANOVA for site/day design (no run factor)
+#'
+#' Model: y_ijk = mu + S_i + D_j(i) + e_ijk
+#' Day is nested within site.
+#' @noRd
+#' @keywords internal
+.anova_site_day <- function(data, factors, value_col) {
+  
+  y <- data[[value_col]]
+  site <- data[[factors$site]]
+  day <- data[[factors$day]]
+  
+  n <- length(y)
+  n_sites <- length(unique(site))
+  
+  # Create site:day interaction for nested structure
+  site_day <- interaction(site, day, drop = TRUE)
+  n_cells <- length(unique(site_day))
+  
+  # Grand mean
+  grand_mean <- mean(y)
+  
+  # Site means
+  site_means <- tapply(y, site, mean)
+  n_per_site <- as.numeric(table(site))
+  
+  # Cell (site:day) means
+  cell_means <- tapply(y, site_day, mean)
+  n_per_cell <- as.numeric(table(site_day))
+  
+  # Sum of Squares
+  ss_total <- sum((y - grand_mean)^2)
+  ss_site <- sum(n_per_site * (site_means - grand_mean)^2)
+  ss_cells <- sum(n_per_cell * (cell_means - grand_mean)^2)
+  ss_day <- ss_cells - ss_site
+  ss_error <- ss_total - ss_cells
+  
+  # Degrees of freedom
+  df_site <- n_sites - 1
+  df_day <- n_cells - n_sites
+  df_error <- n - n_cells
+  df_total <- n - 1
+  
+  # Mean Squares
+  ms_site <- ss_site / df_site
+  ms_day <- if (df_day > 0) ss_day / df_day else 0
+  ms_error <- if (df_error > 0) ss_error / df_error else 0
+  
+  # Design coefficients
+  design_info <- .get_design_coefficients_site_day(data, factors)
+  
+  # Variance components
+  var_error <- ms_error
+  var_day <- if (design_info$n_d > 0) (ms_day - ms_error) / design_info$n_d else 0
+  var_site <- if (design_info$n_s > 0) (ms_site - ms_day) / design_info$n_s else 0
+  
+  var_day <- max(0, var_day)
+  var_site <- max(0, var_site)
+  
+  var_total <- var_site + var_day + var_error
+  
+  variance_components <- data.frame(
+    component = c("between_site", "between_day", "error", "total"),
+    variance = c(var_site, var_day, var_error, var_total),
+    sd = c(sqrt(var_site), sqrt(var_day), sqrt(var_error), sqrt(var_total)),
+    pct_total = c(
+      100 * var_site / var_total,
+      100 * var_day / var_total,
+      100 * var_error / var_total,
+      100
+    ),
+    df = c(df_site, df_day, df_error, df_total),
+    stringsAsFactors = FALSE
+  )
+  
+  anova_table <- data.frame(
+    source = c("site", "day(site)", "error", "total"),
+    df = c(df_site, df_day, df_error, df_total),
+    ss = c(ss_site, ss_day, ss_error, ss_total),
+    ms = c(ms_site, ms_day, ms_error, NA_real_),
+    stringsAsFactors = FALSE
+  )
+  
+  list(
+    variance_components = variance_components,
+    anova_table = anova_table,
+    coefficients = design_info
+  )
+}
+
+
+#' Calculate EMS coefficients for site/day design
+#' @noRd
+#' @keywords internal
+.get_design_coefficients_site_day <- function(data, factors) {
+  
+  site <- data[[factors$site]]
+  day <- data[[factors$day]]
+  site_day <- interaction(site, day, drop = TRUE)
+  
+  n <- nrow(data)
+  n_sites <- length(unique(site))
+  n_cells <- length(unique(site_day))
+  
+  n_per_site <- as.numeric(table(site))
+  n_per_cell <- as.numeric(table(site_day))
+  days_per_site <- tapply(day, site, function(x) length(unique(x)))
+  
+  if (length(unique(n_per_cell)) == 1 && length(unique(days_per_site)) == 1) {
+    n_d <- n_per_cell[1]
+    n_s <- n_d * days_per_site[1]
+  } else {
+    n_d <- (n - sum(n_per_cell^2) / n) / (n_cells - n_sites)
+    if (!is.finite(n_d) || n_d <= 0) n_d <- mean(n_per_cell)
+    n_s <- mean(n_per_site)
+  }
+  
+  list(n_d = n_d, n_s = n_s)
+}
+
+
+#' ANOVA for full site/day/run design
+#'
+#' Model: y_ijkl = mu + S_i + D_j(i) + R_k(ij) + e_l(ijk)
+#' @noRd
+#' @keywords internal
+.anova_site_day_run <- function(data, factors, value_col) {
+  
+  y <- data[[value_col]]
+  site <- data[[factors$site]]
+  day <- data[[factors$day]]
+  run <- data[[factors$run]]
+  
+  n <- length(y)
+  n_sites <- length(unique(site))
+  
+  # Create nested interaction terms
+  site_day <- interaction(site, day, drop = TRUE)
+  site_day_run <- interaction(site, day, run, drop = TRUE)
+  
+  n_site_days <- length(unique(site_day))
+  n_cells <- length(unique(site_day_run))
+  
+  # Grand mean
+  grand_mean <- mean(y)
+  
+  # Means at each level
+  site_means <- tapply(y, site, mean)
+  site_day_means <- tapply(y, site_day, mean)
+  cell_means <- tapply(y, site_day_run, mean)
+  
+  # Group sizes
+  n_per_site <- as.numeric(table(site))
+  n_per_site_day <- as.numeric(table(site_day))
+  n_per_cell <- as.numeric(table(site_day_run))
+  
+  # Sum of Squares
+  ss_total <- sum((y - grand_mean)^2)
+  ss_site <- sum(n_per_site * (site_means - grand_mean)^2)
+  ss_site_day <- sum(n_per_site_day * (site_day_means - grand_mean)^2)
+  ss_cells <- sum(n_per_cell * (cell_means - grand_mean)^2)
+  
+  ss_day <- ss_site_day - ss_site
+  ss_run <- ss_cells - ss_site_day
+  ss_error <- ss_total - ss_cells
+  
+  # Degrees of freedom
+  df_site <- n_sites - 1
+  df_day <- n_site_days - n_sites
+  df_run <- n_cells - n_site_days
+  df_error <- n - n_cells
+  df_total <- n - 1
+  
+  # Mean Squares
+  ms_site <- ss_site / df_site
+  ms_day <- if (df_day > 0) ss_day / df_day else 0
+  ms_run <- if (df_run > 0) ss_run / df_run else 0
+  ms_error <- if (df_error > 0) ss_error / df_error else 0
+  
+  # Design coefficients (simplified for balanced designs)
+  design_info <- .get_design_coefficients_full(data, factors)
+  
+  # Variance components
+  var_error <- ms_error
+  var_run <- if (design_info$n_r > 0) (ms_run - ms_error) / design_info$n_r else 0
+  var_day <- if (design_info$n_d > 0) (ms_day - ms_run) / design_info$n_d else 0
+  var_site <- if (design_info$n_s > 0) (ms_site - ms_day) / design_info$n_s else 0
+  
+  var_run <- max(0, var_run)
+  var_day <- max(0, var_day)
+  var_site <- max(0, var_site)
+  
+  var_total <- var_site + var_day + var_run + var_error
+  
+  variance_components <- data.frame(
+    component = c("between_site", "between_day", "between_run", "error", "total"),
+    variance = c(var_site, var_day, var_run, var_error, var_total),
+    sd = c(sqrt(var_site), sqrt(var_day), sqrt(var_run),
+           sqrt(var_error), sqrt(var_total)),
+    pct_total = c(
+      100 * var_site / var_total,
+      100 * var_day / var_total,
+      100 * var_run / var_total,
+      100 * var_error / var_total,
+      100
+    ),
+    df = c(df_site, df_day, df_run, df_error, df_total),
+    stringsAsFactors = FALSE
+  )
+  
+  anova_table <- data.frame(
+    source = c("site", "day(site)", "run(site:day)", "error", "total"),
+    df = c(df_site, df_day, df_run, df_error, df_total),
+    ss = c(ss_site, ss_day, ss_run, ss_error, ss_total),
+    ms = c(ms_site, ms_day, ms_run, ms_error, NA_real_),
+    stringsAsFactors = FALSE
+  )
+  
+  list(
+    variance_components = variance_components,
+    anova_table = anova_table,
+    coefficients = design_info
+  )
+}
+
+
+#' Calculate EMS coefficients for full site/day/run design
+#' @noRd
+#' @keywords internal
+.get_design_coefficients_full <- function(data, factors) {
+  
+  site <- data[[factors$site]]
+  day <- data[[factors$day]]
+  run <- data[[factors$run]]
+  
+  site_day <- interaction(site, day, drop = TRUE)
+  site_day_run <- interaction(site, day, run, drop = TRUE)
+  
+  n <- nrow(data)
+  n_sites <- length(unique(site))
+  n_site_days <- length(unique(site_day))
+  n_cells <- length(unique(site_day_run))
+  
+  n_per_site <- as.numeric(table(site))
+  n_per_site_day <- as.numeric(table(site_day))
+  n_per_cell <- as.numeric(table(site_day_run))
+  
+  # Check if balanced
+  balanced <- length(unique(n_per_cell)) == 1 &&
+    length(unique(n_per_site_day)) == 1 &&
+    length(unique(n_per_site)) == 1
+  
+  if (balanced) {
+    n_r <- n_per_cell[1]
+    runs_per_day <- n_cells / n_site_days
+    n_d <- n_r * runs_per_day
+    days_per_site <- n_site_days / n_sites
+    n_s <- n_d * days_per_site
+  } else {
+    # Approximate for unbalanced
+    n_r <- mean(n_per_cell)
+    n_d <- mean(n_per_site_day)
+    n_s <- mean(n_per_site)
+  }
+  
+  list(n_r = n_r, n_d = n_d, n_s = n_s)
+}
+
+
+# REML Estimation (Placeholder) ----
 
 #' Estimate variance components using REML
 #' @noRd
 #' @keywords internal
 .estimate_vc_reml <- function(data, factors, value_col) {
-
+  
   # This will be fully implemented in Phase 1d
   # Requires lme4 package
-
+  
   warning("REML estimation not yet implemented. Returning placeholder.",
           call. = FALSE)
-
+  
   # Return same structure as ANOVA
   list(
     variance_components = data.frame(
@@ -723,15 +1250,17 @@ if (method == "reml") {
 }
 
 
+# Confidence Intervals (Placeholder) ----
+
 #' Calculate confidence intervals for precision estimates
 #' @noRd
 #' @keywords internal
 .calculate_precision_ci <- function(vc_result, conf_level, ci_method, boot_n,
-                                     data, factors, value_col, method) {
-
+                                    data, factors, value_col, method) {
+  
   # This will be fully implemented in Phase 1c
   # For now, return placeholder
-
+  
   # Placeholder structure
   list(
     repeatability_ci = c(lower = NA_real_, upper = NA_real_),
@@ -741,28 +1270,81 @@ if (method == "reml") {
 }
 
 
+# Precision Summary ----
+
 #' Build precision summary data frame
 #' @noRd
 #' @keywords internal
 .build_precision_summary <- function(vc_result, ci_result, grand_mean, factors) {
-
-  # This will be refined in Phase 1b/1c
-  # For now, return placeholder structure
-
-  has_site <- !is.null(factors$site)
-  has_run <- !is.null(factors$run)
-
-  measures <- c("Repeatability")
-  if (has_run) measures <- c(measures, "Between-run")
-  measures <- c(measures, "Between-day", "Intermediate precision")
-  if (has_site) measures <- c(measures, "Between-site", "Reproducibility")
-
+  
+  vc <- vc_result$variance_components
+  has_site <- "between_site" %in% vc$component
+  has_run <- "between_run" %in% vc$component
+  
+  # Extract variances
+  var_error <- vc$variance[vc$component == "error"]
+  var_day <- vc$variance[vc$component == "between_day"]
+  var_run <- if (has_run) vc$variance[vc$component == "between_run"] else 0
+  var_site <- if (has_site) vc$variance[vc$component == "between_site"] else 0
+  
+  # Calculate composite precision measures
+  # Repeatability = within-run (error) SD
+  sd_repeatability <- sqrt(var_error)
+  
+  # Intermediate precision (within-lab) = sqrt(var_day + var_run + var_error)
+  sd_intermediate <- sqrt(var_day + var_run + var_error)
+  
+  # Reproducibility (total) = sqrt(var_site + var_day + var_run + var_error)
+  sd_reproducibility <- sqrt(var_site + var_day + var_run + var_error)
+  
+  # Build output
+  measures <- list()
+  sds <- list()
+  
+  # Always have repeatability
+  measures$repeatability <- "Repeatability"
+  sds$repeatability <- sd_repeatability
+  
+  # Between-run if present
+  if (has_run) {
+    measures$between_run <- "Between-run"
+    sds$between_run <- sqrt(var_run)
+  }
+  
+  # Between-day
+  measures$between_day <- "Between-day"
+  sds$between_day <- sqrt(var_day)
+  
+  # Intermediate precision (within-lab)
+  measures$intermediate <- "Intermediate precision"
+  sds$intermediate <- sd_intermediate
+  
+  # Between-site and reproducibility if multi-site
+  if (has_site) {
+    measures$between_site <- "Between-site"
+    sds$between_site <- sqrt(var_site)
+    
+    measures$reproducibility <- "Reproducibility"
+    sds$reproducibility <- sd_reproducibility
+  }
+  
+  # Convert to vectors
+  measure_names <- unlist(measures)
+  sd_values <- unlist(sds)
+  
+  # Calculate CVs (as percentage)
+  cv_values <- 100 * sd_values / grand_mean
+  
+  # For now, CIs are placeholders (will be filled in Phase 1c)
+  n_measures <- length(measure_names)
+  
   data.frame(
-    measure = measures,
-    sd = rep(NA_real_, length(measures)),
-    cv_pct = rep(NA_real_, length(measures)),
-    ci_lower = rep(NA_real_, length(measures)),
-    ci_upper = rep(NA_real_, length(measures)),
+    measure = measure_names,
+    sd = sd_values,
+    cv_pct = cv_values,
+    ci_lower = rep(NA_real_, n_measures),
+    ci_upper = rep(NA_real_, n_measures),
+    row.names = NULL,
     stringsAsFactors = FALSE
   )
 }
