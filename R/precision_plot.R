@@ -173,7 +173,7 @@ plot.precision_study <- function(x,
   if (is.null(colors)) {
     colors <- c(
       "Repeatability" = "#2166AC",
-      "Intermediate precision" = "#B2182B",
+      "Within-laboratory precision" = "#B2182B",
       "Reproducibility" = "#1B7837"
     )
   }
@@ -198,7 +198,7 @@ plot.precision_study <- function(x,
   }))
   
   # Filter to key measures (ones that make sense to compare across samples)
-  key_measures <- c("Repeatability", "Intermediate precision", "Reproducibility")
+  key_measures <- c("Repeatability", "Within-laboratory precision", "Reproducibility")
   cv_data <- cv_data[cv_data$measure %in% key_measures, ]
   cv_data$measure <- factor(cv_data$measure, levels = key_measures)
   
@@ -258,7 +258,7 @@ plot.precision_study <- function(x,
       "Between-run" = "#7570B3",
       "Between-day" = "#D95F02",
       "Between-site" = "#1B9E77",
-      "Intermediate precision" = "#B2182B",
+      "Within-laboratory precision" = "#B2182B",
       "Reproducibility" = "#1B7837"
     )
   }
@@ -267,7 +267,7 @@ plot.precision_study <- function(x,
   prec <- x$precision
   
   # Order measures logically (bottom to top in forest plot after coord_flip)
-  measure_order <- c("Reproducibility", "Intermediate precision", 
+  measure_order <- c("Reproducibility", "Within-laboratory precision", 
                      "Between-site", "Between-day", "Between-run",
                      "Repeatability")
   prec$measure <- factor(prec$measure, 

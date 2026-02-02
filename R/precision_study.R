@@ -3,7 +3,7 @@
 #' @description
 #' Performs variance component analysis for precision experiments following
 #' established methodology for clinical laboratory method validation. Estimates
-#' repeatability, intermediate precision, and reproducibility from nested
+#' repeatability, Within-laboratory precision, and reproducibility from nested
 #' experimental designs.
 #'
 #' @param data A data frame containing the precision experiment data.
@@ -109,7 +109,7 @@
 #'   \item **Repeatability**: Within-run precision (sqrt of error variance)
 #'   \item **Between-run precision**: Additional variability between runs
 #'   \item **Between-day precision**: Additional variability between days
-#'   \item **Intermediate precision**: Within-laboratory precision
+#'   \item **Within-laboratory precision**: Within-laboratory precision
 #'     (combines day, run, and error variance)
 #'   \item **Reproducibility**: Total precision including between-site
 #'     variability (for multi-site designs)
@@ -1563,7 +1563,7 @@ precision_study <- function(data,
     c(lower = NA_real_, upper = NA_real_)
   }
   
-  # CI for intermediate precision (within-lab)
+  # CI for Within-laboratory precision (within-lab)
   if (has_run) {
     intermediate_components <- c(var_day, var_run, var_error)
     intermediate_dfs <- c(df_day, df_run, df_error)
@@ -2041,8 +2041,8 @@ precision_study <- function(data,
   ci_lowers <- c(ci_lowers, day_ci["lower"])
   ci_uppers <- c(ci_uppers, day_ci["upper"])
   
-  # Intermediate precision (within-lab)
-  measures <- c(measures, "Intermediate precision")
+  # Within-laboratory precision (within-lab)
+  measures <- c(measures, "Within-laboratory precision")
   sds <- c(sds, sd_intermediate)
   int_ci <- get_sd_ci("intermediate")
   ci_lowers <- c(ci_lowers, int_ci["lower"])

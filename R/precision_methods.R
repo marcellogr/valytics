@@ -305,7 +305,7 @@ print.summary.precision_study <- function(x, digits = 4, ...) {
                     round(sp$cv_pct[repeat_idx], 2)))
       }
       
-      # Intermediate precision (look for various names)
+      # Within-laboratory precision (look for various names)
       inter_idx <- which(grepl("Intermediate|Within-laboratory", sp$measure, 
                                ignore.case = TRUE))
       if (length(inter_idx) > 0) {
@@ -322,7 +322,7 @@ print.summary.precision_study <- function(x, digits = 4, ...) {
   cat("Interpretation:\n")
   cat(strrep("-", 55), "\n")
   
-  # Get repeatability and intermediate precision
+  # Get repeatability and Within-laboratory precision
   prec <- x$precision
   repeat_cv <- prec$cv_pct[prec$measure == "Repeatability"]
   inter_idx <- which(grepl("Intermediate|Within-laboratory", prec$measure, 
@@ -331,7 +331,7 @@ print.summary.precision_study <- function(x, digits = 4, ...) {
   
   cat(sprintf("  Repeatability CV: %s%%\n", round(repeat_cv, 2)))
   if (!is.na(inter_cv)) {
-    cat(sprintf("  Intermediate precision CV: %s%%\n", round(inter_cv, 2)))
+    cat(sprintf("  Within-laboratory precision CV: %s%%\n", round(inter_cv, 2)))
     
     # Ratio interpretation
     if (repeat_cv > 0) {
