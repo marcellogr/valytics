@@ -1,3 +1,50 @@
+# valytics 0.4.0
+
+## New features
+
+### Precision Experiments (EP05/EP15-aligned)
+
+* `precision_study()`: Comprehensive variance component analysis for precision 
+  experiments. Supports multiple experimental designs with automatic detection:
+  - EP05-style: 20 days × 2 runs × 2 replicates
+  - EP15-style: 5 days × 5 replicates (user verification)
+  - Multi-site: 3+ sites × days × replicates (reproducibility)
+  - Custom nested designs with any factor combination
+
+* Variance component estimation via two methods:
+  - ANOVA (Method of Moments) — default, works for balanced designs
+  - REML (Restricted Maximum Likelihood) — requires lme4, better for unbalanced
+
+* Confidence intervals for precision estimates:
+  - Satterthwaite approximation (default)
+  - Modified Large Sample (MLS) method
+  - Bootstrap BCa method
+
+* `verify_precision()`: Statistical verification of precision against 
+  manufacturer claims using chi-square hypothesis testing. Features:
+  - Accepts numeric vectors, precision_study objects, or data frames
+  - Upper verification limit (UVL) calculation
+  - Full hypothesis test output with p-values
+  - Pass/fail determination with interpretation
+
+* S3 methods: `print()`, `summary()`, `plot()`, `autoplot()` for both functions
+
+* Three visualization types for precision studies:
+  - `type = "variance"`: Variance component bar chart
+  - `type = "cv"`: CV profile across concentration levels
+  - `type = "precision"`: Forest plot with confidence intervals
+
+## Dependencies
+
+* `lme4` added to Suggests for REML estimation (optional)
+
+## Documentation
+
+* Comprehensive roxygen2 documentation for all exported functions
+* Examples demonstrating typical precision study workflows
+
+---
+
 # valytics 0.3.0
 
 ## New features

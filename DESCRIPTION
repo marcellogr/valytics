@@ -25,7 +25,7 @@ Depends:
     R (>= 3.5.0)
 Imports: 
     ggplot2,
-    robslopes
+    robslopes,
 	stats
 Suggests: 
     testthat (>= 3.0.0),
