@@ -849,10 +849,10 @@ test_that("Precision summary calculates correct measures for day-only design", {
   
   prec <- result$precision
   
-  # Should have: Repeatability, Between-day, Intermediate precision
+  # Should have: Repeatability, Between-day, Within-laboratory precision
   expect_true("Repeatability" %in% prec$measure)
   expect_true("Between-day" %in% prec$measure)
-  expect_true("Intermediate precision" %in% prec$measure)
+  expect_true("Within-laboratory precision" %in% prec$measure)
   
   # Should NOT have: Between-run, Between-site, Reproducibility
   expect_false("Between-run" %in% prec$measure)
@@ -880,7 +880,7 @@ test_that("Precision summary calculates correct measures for day/run design", {
   expect_true("Repeatability" %in% prec$measure)
   expect_true("Between-run" %in% prec$measure)
   expect_true("Between-day" %in% prec$measure)
-  expect_true("Intermediate precision" %in% prec$measure)
+  expect_true("Within-laboratory precision" %in% prec$measure)
 })
 
 
@@ -896,11 +896,11 @@ test_that("Precision summary calculates correct measures for multi-site design",
   expect_true("Between-day" %in% prec$measure)
   expect_true("Between-site" %in% prec$measure)
   expect_true("Reproducibility" %in% prec$measure)
-  expect_true("Intermediate precision" %in% prec$measure)
+  expect_true("Within-laboratory precision" %in% prec$measure)
 })
 
 
-test_that("Intermediate precision is correctly calculated", {
+test_that("Within-laboratory precision is correctly calculated", {
   set.seed(404)
   
   # Create data with known components
@@ -923,13 +923,13 @@ test_that("Intermediate precision is correctly calculated", {
   vc <- result$variance_components
   prec <- result$precision
   
-  # Intermediate precision should be sqrt(var_day + var_run + var_error)
+  # Within-laboratory precision should be sqrt(var_day + var_run + var_error)
   estimated_var_day <- vc$variance[vc$component == "between_day"]
   estimated_var_run <- vc$variance[vc$component == "between_run"]
   estimated_var_error <- vc$variance[vc$component == "error"]
   
   expected_intermediate_sd <- sqrt(estimated_var_day + estimated_var_run + estimated_var_error)
-  actual_intermediate_sd <- prec$sd[prec$measure == "Intermediate precision"]
+  actual_intermediate_sd <- prec$sd[prec$measure == "Within-laboratory precision"]
   
   expect_equal(actual_intermediate_sd, expected_intermediate_sd, tolerance = 1e-10)
 })
@@ -1297,7 +1297,7 @@ test_that("Multi-site CIs are correctly ordered", {
                           ci_method = "satterthwaite")
   
   # Reproducibility SD should be >= Intermediate SD
-  inter_sd <- prec$precision$sd[prec$precision$measure == "Intermediate precision"]
+  inter_sd <- prec$precision$sd[prec$precision$measure == "Within-laboratory precision"]
   repro_sd <- prec$precision$sd[prec$precision$measure == "Reproducibility"]
   
   expect_true(repro_sd >= inter_sd)
