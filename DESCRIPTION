@@ -13,8 +13,10 @@ Description: Provides statistical methods for analytical method comparison and
     regression accounting for measurement error in both variables 
     (Linnet (1993) <doi:10.1093/clinchem/39.3.424>). Also includes tools for 
     setting quality goals based on biological variation (Fraser & Petersen (1993) 
-    <doi:10.1093/clinchem/39.7.1447>) and calculating Six Sigma metrics. Commonly 
-    used in clinical laboratory method validation. Provides publication-ready 
+    <doi:10.1093/clinchem/39.7.1447>) and calculating Six Sigma metrics, 
+	precision experiments with variance component analysis, precision
+    profiles for functional sensitivity estimation (Kroll & Emancipator (1993) <PMID: 8448849>).
+	Commonly used in clinical laboratory method validation. Provides publication-ready 
     plots and comprehensive statistical summaries.
 License: GPL-3
 Encoding: UTF-8
@@ -26,7 +28,8 @@ Depends:
 Imports: 
     ggplot2,
     robslopes,
-	stats
+    stats,
+    utils
 Suggests: 
     testthat (>= 3.0.0),
     knitr (>= 1.43),

@@ -1,0 +1,333 @@
+---
+title: "Precision Profiles and Functional Sensitivity"
+author: "Marcello Grassi"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Precision Profiles and Functional Sensitivity}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+ collapse = TRUE,
+ comment = "#>",
+ fig.width = 6,
+ fig.height = 4,
+ fig.align = "center"
+)
+```
+
+## Introduction
+
+Analytical precision varies across the measurement range of most laboratory assays. Near the limit of detection, imprecision (expressed as coefficient of variation, CV) is typically higher, while at elevated concentrations, CV approaches an asymptotic minimum. Understanding this relationship is essential for:
+ 
+- Determining **functional sensitivity**: the lowest concentration at which acceptable precision is achieved
+- Evaluating assay performance across clinical decision points
+- Comparing measurement procedures from different manufacturers
+
+This vignette demonstrates how to construct precision profiles and estimate functional sensitivity using `valytics`.
+
+```{r load-package}
+library(valytics)
+library(ggplot2)
+```
+
+## The Precision Profile Concept
+
+A precision profile plots CV (or SD) against analyte concentration. For many immunoassays and clinical chemistry methods, this relationship follows a characteristic hyperbolic pattern:
+
+$$CV = \sqrt{a^2 + \left(\frac{b}{x}\right)^2}$$
+
+where:
+- $a$ is the asymptotic CV at high concentrations (the "floor" of precision)
+- $b$ is the concentration-dependent component
+- $x$ is the analyte concentration
+
+At low concentrations, the $(b/x)^2$ term dominates, causing CV to increase sharply. At high concentrations, CV approaches $a$.
+
+## Example: High-Sensitivity Troponin Assay
+
+We will use the `troponin_precision` dataset, which contains multi-level precision data for a simulated high-sensitivity cardiac troponin I assay.
+
+```{r load-data}
+data("troponin_precision")
+head(troponin_precision)
+```
+
+The dataset includes measurements at six concentration levels from 5 to 500 ng/L, with a nested design of 5 days × 2 runs × 2 replicates per level.
+
+```{r design-summary}
+# Summarize the experimental design
+table(troponin_precision$level, troponin_precision$day)
+```
+
+## Step 1: Precision Study Analysis
+
+First, we analyze precision at each concentration level using `precision_study()`. The `sample` argument indicates that each level should be analyzed separately.
+
+```{r precision-study}
+prec <- precision_study(
+ data = troponin_precision,
+ value = "value",
+ sample = "level",
+ day = "day",
+ run = "run"
+)
+
+print(prec)
+```
+
+The results show variance components and precision estimates. For precision profiles, we are primarily interested in within-laboratory precision (or repeatability) at each concentration level.
+
+We can examine results for individual levels:
+
+```{r by-sample}
+# Access results for each concentration level
+names(prec$by_sample)
+
+# Example: Level 1 (5 ng/L)
+prec$by_sample$L1$precision
+```
+
+## Step 2: Generate Precision Profile
+
+Now we generate the precision profile by modeling CV as a function of concentration:
+
+```{r precision-profile}
+profile <- precision_profile(
+ prec,
+ model = "hyperbolic",
+ cv_targets = c(10, 20)
+)
+
+print(profile)
+```
+
+The output shows:
+- **Model parameters**: The fitted values of $a$ (asymptotic CV) and $b$
+- **Fit quality**: R² and RMSE indicating how well the model fits the data
+- **Functional sensitivity**: The concentration at which target CVs are achieved
+
+## Understanding the Model Parameters
+
+```{r parameters}
+# Extract model parameters
+a <- profile$model$parameters["a"]
+b <- profile$model$parameters["b"]
+
+cat(sprintf("Asymptotic CV (a): %.2f%%\n", a))
+cat(sprintf("Concentration component (b): %.2f\n", b))
+cat(sprintf("\nModel equation: %s\n", profile$model$equation))
+```
+
+The asymptotic CV tells us the best precision achievable at high concentrations. In this case, ~3% CV represents the analytical "floor" of the assay.
+
+## Visualizing the Precision Profile
+
+```{r profile-plot, fig.cap = "Precision profile showing CV versus concentration with fitted hyperbolic model."}
+plot(profile)
+```
+
+The plot displays:
+- **Points**: Observed CV values at each concentration level
+- **Blue curve**: Fitted hyperbolic model
+- **Dashed lines**: Target CV thresholds (10% and 20%)
+- **Dotted lines**: Concentrations at which targets are achieved (functional sensitivity)
+
+For a logarithmic concentration scale (often more informative across wide ranges):
+
+```{r profile-log, fig.cap = "Precision profile with logarithmic concentration scale."}
+plot(profile, log_x = TRUE)
+```
+
+## Functional Sensitivity
+
+Functional sensitivity is the lowest concentration at which a measurement procedure achieves a specified level of precision. Common thresholds include:
+
+- **10% CV**: Modern standard for high-sensitivity assays
+- **20% CV**: Traditional standard (originally for TSH assays)
+
+```{r functional-sensitivity}
+profile$functional_sensitivity
+```
+
+In this example:
+- At 10% CV, the functional sensitivity is approximately `r round(profile$functional_sensitivity$concentration[1], 1)` ng/L
+- At 20% CV, the functional sensitivity is approximately `r round(profile$functional_sensitivity$concentration[2], 1)` ng/L
+
+### Unachievable Targets
+
+If a target CV is below the asymptotic minimum ($a$), it cannot be achieved at any concentration:
+
+```{r unachievable}
+# Try a target CV of 2% (below asymptotic ~3%)
+profile_strict <- precision_profile(
+ prec,
+ cv_targets = c(2, 5, 10)
+)
+
+profile_strict$functional_sensitivity
+```
+
+The 2% CV target is marked as "not achievable" because it is below the assay's asymptotic CV floor.
+
+## Bootstrap Confidence Intervals
+
+For uncertainty quantification on functional sensitivity estimates, use bootstrap resampling:
+
+```{r bootstrap, eval = FALSE}
+# Note: This takes longer to run
+profile_boot <- precision_profile(
+ prec,
+ cv_targets = c(10, 20),
+ bootstrap = TRUE,
+ boot_n = 999
+)
+
+profile_boot$functional_sensitivity
+```
+
+The confidence intervals help assess the precision of the functional sensitivity estimates.
+
+## Alternative: Linear Model
+
+For some assays, a simpler linear model may be adequate:
+
+$$CV = a + \frac{b}{x}$$
+
+```{r linear-model}
+profile_linear <- precision_profile(
+ prec,
+ model = "linear",
+ cv_targets = c(10, 20)
+)
+
+print(profile_linear)
+```
+
+Compare model fits:
+
+```{r compare-models}
+cat("Hyperbolic model R²:", round(profile$fit_quality$r_squared, 4), "\n")
+cat("Linear model R²:", round(profile_linear$fit_quality$r_squared, 4), "\n")
+```
+
+The hyperbolic model typically provides better fit because it correctly captures the asymptotic behavior at high concentrations.
+
+## Detailed Summary
+
+The `summary()` function provides comprehensive output:
+
+```{r summary, eval = FALSE}
+summary(profile)
+```
+
+This includes:
+- Fitted values at each concentration level
+- Residual analysis
+- Complete interpretation of functional sensitivity results
+
+## Working with Data Frames Directly
+
+If you have pre-calculated CV values (e.g., from external sources), you can create a precision profile directly from a data frame:
+
+```{r dataframe-input}
+# Create a data frame with concentration and CV values
+cv_data <- data.frame(
+ concentration = c(5, 10, 25, 50, 100, 500),
+ cv_pct = c(5.8, 4.2, 3.5, 3.2, 3.1, 3.0)
+)
+
+profile_df <- precision_profile(
+ cv_data,
+ concentration = "concentration",
+ cv = "cv_pct"
+)
+
+print(profile_df)
+```
+
+## Clinical Application Example
+
+For high-sensitivity cardiac troponin assays, regulatory and clinical guidelines suggest:
+
+1. **Functional sensitivity should be ≤ 50% of the 99th percentile URL**
+ - If 99th percentile URL = 20 ng/L
+ - Then functional sensitivity should be ≤ 10 ng/L
+
+2. **CV at the 99th percentile should be ≤ 10%**
+
+Let us check our simulated assay against these criteria:
+
+```{r clinical-check}
+# Assume 99th percentile URL = 20 ng/L
+url_99th <- 20
+
+# Check functional sensitivity at 10% CV
+fs_10pct <- profile$functional_sensitivity$concentration[
+ profile$functional_sensitivity$cv_target == 10
+]
+
+cat(sprintf("99th percentile URL: %.0f ng/L\n", url_99th))
+cat(sprintf("Functional sensitivity (10%% CV): %.1f ng/L\n", fs_10pct))
+cat(sprintf("Ratio (FS / URL): %.2f\n", fs_10pct / url_99th))
+
+if (fs_10pct <= 0.5 * url_99th) {
+ cat("\n✓ Meets criterion: FS ≤ 50% of 99th percentile URL\n")
+} else {
+ cat("\n✗ Does not meet criterion: FS > 50% of 99th percentile URL\n")
+}
+```
+
+## Recommendations for Precision Profile Studies
+
+Based on established methodology:
+
+1. **Minimum concentration levels**: At least 4-5 levels spanning the measurement range
+2. **Concentration span**: Should cover at least 2 orders of magnitude when possible
+3. **Precision study design**: Minimum 5 days with multiple runs per day
+4. **Include levels near clinical decision points**: 99th percentile, diagnostic thresholds
+
+## Summary
+
+The precision profile workflow in `valytics`:
+
+1. **Collect data** at multiple concentration levels using a nested precision design
+2. **Run `precision_study()`** with `sample` argument to analyze each level
+3. **Generate `precision_profile()`** to model CV-concentration relationship
+4. **Interpret functional sensitivity** relative to clinical requirements
+5. **Visualize** with `plot()` to communicate findings
+
+```{r workflow-summary, eval = FALSE}
+# Complete workflow
+data("troponin_precision")
+
+# Step 1: Precision study
+prec <- precision_study(
+ data = troponin_precision,
+ value = "value",
+ sample = "level",
+ day = "day",
+ run = "run"
+)
+
+# Step 2: Precision profile
+profile <- precision_profile(
+ prec,
+ model = "hyperbolic",
+ cv_targets = c(10, 20)
+)
+
+# Step 3: Interpret and visualize
+summary(profile)
+plot(profile, log_x = TRUE)
+```
+
+## References
+ 
+Armbruster DA, Pry T (2008). Limit of blank, limit of detection and limit of quantitation. Clinical Biochemist Reviews, 29(Suppl 1):S49-S52.
+
+Apple FS, et al. (2017). Cardiac Troponin Assays: Guide to Understanding Analytical Characteristics and Their Impact on Clinical Care. Clinical Chemistry, 63(1):73-81.
+
+Chesher D (2008). Evaluating assay precision. Clinical Biochemist Reviews, 29(Suppl 1):S23-S26.

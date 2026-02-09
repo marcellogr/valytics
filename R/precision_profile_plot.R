@@ -95,30 +95,58 @@ plot.precision_profile <- function(x,
   conc_range <- range(x$input$concentration)
   conc_smooth <- seq(conc_range[1], conc_range[2], length.out = 200)
   
+  # Extract model parameters
+  a <- x$model$parameters["a"]
+  b <- x$model$parameters["b"]
+  
   # Calculate fitted CV for smooth curve
   if (x$model$type == "hyperbolic") {
-    a <- x$model$parameters["a"]
-    b <- x$model$parameters["b"]
     cv_smooth <- sqrt(a^2 + (b / conc_smooth)^2)
   } else {
-    a <- x$model$parameters["a"]
-    b <- x$model$parameters["b"]
     cv_smooth <- a + b / conc_smooth
   }
   
+  # Calculate prediction intervals along the smooth curve ----
+  # Use residual SE from the original fit to compute CI band
+  n <- x$input$n_levels
+  t_crit <- qt(1 - (1 - x$settings$conf_level) / 2, df = n - 2)
+  
+  # Calculate residual SE from the fitted data
+  residuals <- x$fitted$cv_observed - x$fitted$cv_fitted
+  residual_se <- sqrt(sum(residuals^2) / (n - 2))
+  
+  # For prediction intervals that follow the curve shape, we use:
+  # - At each concentration, the prediction SE depends on distance from mean
+  # - SE_pred = residual_se * sqrt(1 + 1/n + (x - mean_x)^2 / SS_x)
+  
+  mean_conc <- mean(x$input$concentration)
+  ss_conc <- sum((x$input$concentration - mean_conc)^2)
+  
+  # Calculate prediction SE at each point on smooth curve
+  pred_se_smooth <- residual_se * sqrt(1 + 1/n + (conc_smooth - mean_conc)^2 / ss_conc)
+  
+  # Calculate CI bounds
+  ci_lower_smooth <- cv_smooth - t_crit * pred_se_smooth
+  ci_upper_smooth <- cv_smooth + t_crit * pred_se_smooth
+  
+  # Ensure non-negative
+  ci_lower_smooth <- pmax(ci_lower_smooth, 0)
+  
   smooth_data <- data.frame(
     concentration = conc_smooth,
-    cv_fitted = cv_smooth
+    cv_fitted = cv_smooth,
+    ci_lower = ci_lower_smooth,
+    ci_upper = ci_upper_smooth
   )
   
   # Build plot ----
   p <- ggplot2::ggplot()
   
-  # Add prediction interval band
+  # Add prediction interval band (using smooth data)
   if (show_ci) {
     p <- p +
       ggplot2::geom_ribbon(
-        data = x$fitted,
+        data = smooth_data,
         ggplot2::aes(x = .data$concentration,
                      ymin = .data$ci_lower,
                      ymax = .data$ci_upper),
@@ -179,7 +207,7 @@ plot.precision_profile <- function(x,
   p <- p +
     ggplot2::labs(
       title = title,
-      subtitle = sprintf("R² = %.3f, %s",
+      subtitle = sprintf("R-squared = %.3f, %s",
                          x$fit_quality$r_squared,
                          x$model$equation),
       x = xlab,

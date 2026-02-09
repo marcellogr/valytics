@@ -1,51 +1,81 @@
 # valytics 0.4.0
 
-## New features
+## New Features
 
 ### Precision Experiments (EP05/EP15-aligned)
 
 * `precision_study()`: Comprehensive variance component analysis for precision 
-  experiments. Supports multiple experimental designs with automatic detection:
-  - EP05-style: 20 days × 2 runs × 2 replicates
-  - EP15-style: 5 days × 5 replicates (user verification)
-  - Multi-site: 3+ sites × days × replicates (reproducibility)
-  - Custom nested designs with any factor combination
+  experiments with nested experimental designs.
+  
+  - Supports multiple design types: single-site (day/run/replicate), 
+    multi-site (site/day/run/replicate), and custom nested designs
+  - Automatic design detection from data structure
+  - Two estimation methods: ANOVA (method of moments) and REML (via lme4)
+  - Three confidence interval methods: Satterthwaite (default), Modified Large 
+    Sample (MLS), and bootstrap BCa
+  - Multi-sample support for analyzing multiple concentration levels
+  - Complete S3 methods: `print()`, `summary()`, `plot()`, `autoplot()`
 
-* Variance component estimation via two methods:
-  - ANOVA (Method of Moments) — default, works for balanced designs
-  - REML (Restricted Maximum Likelihood) — requires lme4, better for unbalanced
-
-* Confidence intervals for precision estimates:
-  - Satterthwaite approximation (default)
-  - Modified Large Sample (MLS) method
-  - Bootstrap BCa method
-
-* `verify_precision()`: Statistical verification of precision against 
-  manufacturer claims using chi-square hypothesis testing. Features:
+* `verify_precision()`: Statistical verification of observed precision against 
+  manufacturer claims using chi-square hypothesis testing.
+  
   - Accepts numeric vectors, precision_study objects, or data frames
-  - Upper verification limit (UVL) calculation
-  - Full hypothesis test output with p-values
-  - Pass/fail determination with interpretation
+  - Calculates Upper Verification Limit (UVL)
+  - Provides confidence intervals for observed precision
+  - Clear pass/fail determination with detailed interpretation
 
-* S3 methods: `print()`, `summary()`, `plot()`, `autoplot()` for both functions
+* `precision_profile()`: Models the relationship between CV and concentration
+  for functional sensitivity estimation.
+  
+  - Hyperbolic model: CV = sqrt(a² + (b/x)²) (default)
+  - Linear model: CV = a + b/x
+  - Calculates functional sensitivity at user-specified CV targets
+  - Optional bootstrap confidence intervals for functional sensitivity
+  - Integrates with precision_study objects for seamless workflow
 
-* Three visualization types for precision studies:
+### Precision Measures
+
+The package now calculates and reports:
+- **Repeatability**: Within-run precision
+- **Between-run precision**: Additional variability between runs within a day
+- **Between-day precision**: Additional variability between days
+- **Within-laboratory precision**: Combined day + run + error variance
+- **Between-site precision**: Additional variability between sites (multi-site only
+- **Reproducibility**: Total precision including all variance components
+
+### Visualization
+
+* `plot.precision_study()` with three plot types:
   - `type = "variance"`: Variance component bar chart
-  - `type = "cv"`: CV profile across concentration levels
-  - `type = "precision"`: Forest plot with confidence intervals
+  - `type = "cv"`: CV profile across precision measures with CIs
+  - `type = "precision"`: Forest plot of precision estimates
+
+* `plot.precision_profile()`: Publication-ready precision profile visualization
+  - Fitted curve with prediction intervals
+  - Functional sensitivity target lines
+  - Optional logarithmic x-axis scale
+
+## New Dataset
+
+* `troponin_precision`: High-sensitivity cardiac troponin I precision study data
+  with 6 concentration levels (5-500 ng/L), designed for demonstrating 
+  `precision_study()` and `precision_profile()` workflows.
+
+## Documentation
+
+* New vignette: "Precision Profiles and Functional Sensitivity" - demonstrates 
+  the complete workflow from raw precision data to functional sensitivity 
+  estimation with clinical interpretation.
 
 ## Dependencies
 
 * `lme4` added to Suggests for REML estimation (optional)
 
-## Documentation
-
-* Comprehensive roxygen2 documentation for all exported functions
-* Examples demonstrating typical precision study workflows
-
 ---
 
 # valytics 0.3.0
+
+Initial CRAN release.
 
 ## New features
 
@@ -90,8 +120,6 @@
   guidance on choosing between regression methods.
 
 # valytics 0.1.0
-
-Initial CRAN release.
 
 ## New features
 

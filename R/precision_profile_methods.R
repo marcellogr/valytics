@@ -44,7 +44,7 @@ print.precision_profile <- function(x, digits = 3, ...) {
   
   # Fit quality
   cat("Fit Quality:\n")
-  cat(sprintf("  R² = %.*f\n", digits, x$fit_quality$r_squared))
+  cat(sprintf("  R-squared = %.*f\n", digits, x$fit_quality$r_squared))
   cat(sprintf("  RMSE = %.*f\n", digits, x$fit_quality$rmse))
   cat("\n")
   
