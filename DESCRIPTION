@@ -14,10 +14,11 @@ Description: Provides statistical methods for analytical method comparison and
     (Linnet (1993) <doi:10.1093/clinchem/39.3.424>). Also includes tools for 
     setting quality goals based on biological variation (Fraser & Petersen (1993) 
     <doi:10.1093/clinchem/39.7.1447>) and calculating Six Sigma metrics, 
-	precision experiments with variance component analysis, precision
-    profiles for functional sensitivity estimation (Kroll & Emancipator (1993) <PMID: 8448849>).
-	Commonly used in clinical laboratory method validation. Provides publication-ready 
-    plots and comprehensive statistical summaries.
+    precision experiments with variance component analysis, precision
+    profiles for functional sensitivity estimation (Kroll & Emancipator (1993) 
+    <https://pubmed.ncbi.nlm.nih.gov/8448849/>). Commonly used in clinical 
+    laboratory method validation. Provides publication-ready plots and 
+    comprehensive statistical summaries.
 License: GPL-3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -34,7 +35,7 @@ Suggests:
     testthat (>= 3.0.0),
     knitr (>= 1.43),
     rmarkdown (>= 2.22),
-	lme4 (>= 1.1-33)
+    lme4 (>= 1.1-33)
 Config/testthat/edition: 3
 URL: https://github.com/marcellogr/valytics
 BugReports: https://github.com/marcellogr/valytics/issues

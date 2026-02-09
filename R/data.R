@@ -212,7 +212,7 @@
 #' High-sensitivity cardiac troponin assays are used to diagnose acute
 #' myocardial infarction (AMI). Key clinical decision points include:
 #' - 99th percentile upper reference limit (URL): typically 14-26 ng/L
-#' - Functional sensitivity (CV ≤ 10%): should be ≤ 50% of 99th percentile
+#' - Functional sensitivity (CV <= 10%): should be <= 50% of 99th percentile
 #' - Precision at low concentrations is critical for early AMI detection
 #'
 #' @source
