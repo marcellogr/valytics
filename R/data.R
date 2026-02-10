@@ -158,3 +158,95 @@
 #'
 #' @seealso [ba_analysis()], [glucose_methods], [creatinine_serum]
 "troponin_cardiac"
+
+
+
+#' High-Sensitivity Cardiac Troponin I Precision Dataset
+#'
+#' @description
+#' Synthetic dataset for evaluating precision of a high-sensitivity cardiac
+#' troponin I (hs-cTnI) assay across multiple concentration levels. The data
+#' is designed for demonstrating precision studies with variance component
+#' analysis and precision profile estimation.
+#'
+#' @format A data frame with 120 observations and 7 variables:
+#' \describe{
+#'   \item{level}{Factor. Concentration level identifier (L1 through L6).}
+#'   \item{level_label}{Factor. Descriptive level label including concentration
+#'     (e.g., "L1 (5 ng/L)").}
+#'   \item{concentration}{Numeric. Target concentration in ng/L.}
+#'   \item{day}{Factor. Day of measurement (1 through 5).}
+#'   \item{run}{Factor. Run within day (1 or 2).}
+#'   \item{replicate}{Factor. Replicate within run (1 or 2).}
+#'   \item{value}{Numeric. Measured troponin I concentration (ng/L).}
+#' }
+#'
+#' @details
+#' This synthetic dataset simulates a multi-level precision study for a
+#' high-sensitivity cardiac troponin I assay. The data characteristics:
+#'
+#' \itemize{
+#'   \item **Concentration levels**: 5, 10, 25, 50, 100, 500 ng/L
+#'   \item **Design**: 5 days x 2 runs x 2 replicates per level (EP05-style)
+#'   \item **Total observations**: 120 (6 levels x 20 measurements each)
+#'   \item **Precision pattern**: CV decreases with concentration following
+#'     a hyperbolic relationship
+#' }
+#'
+#' The precision profile follows the model:
+#' \deqn{CV = \sqrt{a^2 + (b/x)^2}}
+#'
+#' where approximately:
+#' - \eqn{a \approx 3\%} (asymptotic CV at high concentrations)
+#' - \eqn{b \approx 25} (concentration-dependent component)
+#'
+#' This gives expected CVs of approximately:
+#' - 5 ng/L: ~5.8%
+#' - 10 ng/L: ~4.0%
+#' - 25 ng/L: ~3.2%
+#' - 50 ng/L: ~3.1%
+#' - 100 ng/L: ~3.0%
+#' - 500 ng/L: ~3.0%
+#'
+#' @section Clinical Context:
+#' High-sensitivity cardiac troponin assays are used to diagnose acute
+#' myocardial infarction (AMI). Key clinical decision points include:
+#' - 99th percentile upper reference limit (URL): typically 14-26 ng/L
+#' - Functional sensitivity (CV <= 10%): should be <= 50% of 99th percentile
+#' - Precision at low concentrations is critical for early AMI detection
+#'
+#' @source
+#' Synthetic data generated to mimic realistic precision patterns. See
+#' `data-raw/make_troponin_precision.R` for the generation script.
+#'
+#' @examples
+#' # Load the dataset
+#' data(troponin_precision)
+#' head(troponin_precision)
+#'
+#' # Precision study with multiple concentration levels
+#' prec <- precision_study(
+#'   data = troponin_precision,
+#'   value = "value",
+#'   sample = "level",
+#'   day = "day",
+#'   run = "run"
+#' )
+#' print(prec)
+#'
+#' # Results for each concentration level
+#' names(prec$by_sample)
+#'
+#' # Generate precision profile
+#' profile <- precision_profile(prec, cv_targets = c(10, 20))
+#' print(profile)
+#' plot(profile)
+#'
+#' # Functional sensitivity at 10% CV
+#' profile$functional_sensitivity
+#'
+#' @seealso
+#' [precision_study()] for variance component analysis,
+#' [precision_profile()] for CV-concentration modeling,
+#' [glucose_methods], [creatinine_serum], [troponin_cardiac]
+"troponin_precision"

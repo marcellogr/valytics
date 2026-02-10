@@ -1,4 +1,81 @@
+# valytics 0.4.0
+
+## New Features
+
+### Precision Experiments (EP05/EP15-aligned)
+
+* `precision_study()`: Comprehensive variance component analysis for precision 
+  experiments with nested experimental designs.
+  
+  - Supports multiple design types: single-site (day/run/replicate), 
+    multi-site (site/day/run/replicate), and custom nested designs
+  - Automatic design detection from data structure
+  - Two estimation methods: ANOVA (method of moments) and REML (via lme4)
+  - Three confidence interval methods: Satterthwaite (default), Modified Large 
+    Sample (MLS), and bootstrap BCa
+  - Multi-sample support for analyzing multiple concentration levels
+  - Complete S3 methods: `print()`, `summary()`, `plot()`, `autoplot()`
+
+* `verify_precision()`: Statistical verification of observed precision against 
+  manufacturer claims using chi-square hypothesis testing.
+  
+  - Accepts numeric vectors, precision_study objects, or data frames
+  - Calculates Upper Verification Limit (UVL)
+  - Provides confidence intervals for observed precision
+  - Clear pass/fail determination with detailed interpretation
+
+* `precision_profile()`: Models the relationship between CV and concentration
+  for functional sensitivity estimation.
+  
+  - Hyperbolic model: CV = sqrt(a² + (b/x)²) (default)
+  - Linear model: CV = a + b/x
+  - Calculates functional sensitivity at user-specified CV targets
+  - Optional bootstrap confidence intervals for functional sensitivity
+  - Integrates with precision_study objects for seamless workflow
+
+### Precision Measures
+
+The package now calculates and reports:
+- **Repeatability**: Within-run precision
+- **Between-run precision**: Additional variability between runs within a day
+- **Between-day precision**: Additional variability between days
+- **Within-laboratory precision**: Combined day + run + error variance
+- **Between-site precision**: Additional variability between sites (multi-site only
+- **Reproducibility**: Total precision including all variance components
+
+### Visualization
+
+* `plot.precision_study()` with three plot types:
+  - `type = "variance"`: Variance component bar chart
+  - `type = "cv"`: CV profile across precision measures with CIs
+  - `type = "precision"`: Forest plot of precision estimates
+
+* `plot.precision_profile()`: Publication-ready precision profile visualization
+  - Fitted curve with prediction intervals
+  - Functional sensitivity target lines
+  - Optional logarithmic x-axis scale
+
+## New Dataset
+
+* `troponin_precision`: High-sensitivity cardiac troponin I precision study data
+  with 6 concentration levels (5-500 ng/L), designed for demonstrating 
+  `precision_study()` and `precision_profile()` workflows.
+
+## Documentation
+
+* New vignette: "Precision Profiles and Functional Sensitivity" - demonstrates 
+  the complete workflow from raw precision data to functional sensitivity 
+  estimation with clinical interpretation.
+
+## Dependencies
+
+* `lme4` added to Suggests for REML estimation (optional)
+
+---
+
 # valytics 0.3.0
+
+Initial CRAN release.
 
 ## New features
 
@@ -43,8 +120,6 @@
   guidance on choosing between regression methods.
 
 # valytics 0.1.0
-
-Initial CRAN release.
 
 ## New features
 

@@ -3,7 +3,8 @@
 
 ## usethis namespace: start
 #' @importFrom ggplot2 .data autoplot
-#' @importFrom stats complete.cases median qnorm qt sd shapiro.test quantile pnorm
+#' @importFrom stats aggregate coef complete.cases lm median nls nls.control
+#'   pnorm qchisq qnorm qt quantile sd shapiro.test var
 #' @importFrom utils modifyList
 ## usethis namespace: end
 NULL

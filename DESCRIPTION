@@ -1,6 +1,6 @@
 Package: valytics
 Title: Statistical Methods for Analytical Method Comparison and Validation
-Version: 0.3.0
+Version: 0.4.0
 Authors@R: 
     person("Marcello", "Grassi", , "marcello.grassi@tum.de", 
            role = c("aut", "cre"),
@@ -13,9 +13,12 @@ Description: Provides statistical methods for analytical method comparison and
     regression accounting for measurement error in both variables 
     (Linnet (1993) <doi:10.1093/clinchem/39.3.424>). Also includes tools for 
     setting quality goals based on biological variation (Fraser & Petersen (1993) 
-    <doi:10.1093/clinchem/39.7.1447>) and calculating Six Sigma metrics. Commonly 
-    used in clinical laboratory method validation. Provides publication-ready 
-    plots and comprehensive statistical summaries.
+    <doi:10.1093/clinchem/39.7.1447>) and calculating Six Sigma metrics, 
+    precision experiments with variance component analysis, precision
+    profiles for functional sensitivity estimation (Kroll & Emancipator (1993) 
+    <https://pubmed.ncbi.nlm.nih.gov/8448849/>). Commonly used in clinical 
+    laboratory method validation. Provides publication-ready plots and 
+    comprehensive statistical summaries.
 License: GPL-3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -25,11 +28,14 @@ Depends:
     R (>= 3.5.0)
 Imports: 
     ggplot2,
-    robslopes
+    robslopes,
+    stats,
+    utils
 Suggests: 
     testthat (>= 3.0.0),
     knitr (>= 1.43),
-    rmarkdown (>= 2.22)
+    rmarkdown (>= 2.22),
+    lme4 (>= 1.1-33)
 Config/testthat/edition: 3
 URL: https://github.com/marcellogr/valytics
 BugReports: https://github.com/marcellogr/valytics/issues
