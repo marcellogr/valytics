@@ -1,6 +1,7 @@
 Package: valytics
 Title: Statistical Methods for Analytical Method Comparison and Validation
 Version: 0.4.1
+Date: 2026-02-11
 Authors@R: 
     person("Marcello", "Grassi", , "marcello.grassi@tum.de", 
            role = c("aut", "cre"),
