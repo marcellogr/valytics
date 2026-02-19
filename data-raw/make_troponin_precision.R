@@ -66,7 +66,7 @@ for (i in seq_along(levels)) {
           day = paste0("D", d),
           run = paste0("R", r),
           replicate = rep,
-          concentration = measured,
+          value = measured,
           target = conc
         )
       }
@@ -84,7 +84,7 @@ rownames(troponin_precision) <- NULL
 cat("Dataset structure:\n")
 str(troponin_precision)
 cat("\nSummary by level:\n")
-aggregate(concentration ~ level + target, data = troponin_precision, 
+aggregate(value ~ level + target, data = troponin_precision, 
           FUN = function(x) c(mean = mean(x), sd = sd(x), cv = 100 * sd(x) / mean(x)))
 
 # Save

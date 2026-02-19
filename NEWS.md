@@ -6,7 +6,7 @@ Fixed troponin_precision dataset which was generated with constant values
 variability following a hyperbolic CV model, enabling proper demonstration of
 precision_study() and precision_profile() functions.
 
-# #Documentation
+## Documentation
 
 Updated README with precision experiments examples.
 

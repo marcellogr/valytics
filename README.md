@@ -179,7 +179,7 @@ data(troponin_precision)
 
 prec <- precision_study(
   data = troponin_precision,
-  value = "concentration",
+  value = "value",
   sample = "level",
   day = "day",
   run = "run"
