@@ -5,16 +5,14 @@
 \alias{troponin_precision}
 \title{High-Sensitivity Cardiac Troponin I Precision Dataset}
 \format{
-A data frame with 120 observations and 7 variables:
+A data frame with 120 rows and 6 variables:
 \describe{
-\item{level}{Factor. Concentration level identifier (L1 through L6).}
-\item{level_label}{Factor. Descriptive level label including concentration
-(e.g., "L1 (5 ng/L)").}
-\item{concentration}{Numeric. Target concentration in ng/L.}
-\item{day}{Factor. Day of measurement (1 through 5).}
-\item{run}{Factor. Run within day (1 or 2).}
-\item{replicate}{Factor. Replicate within run (1 or 2).}
-\item{value}{Numeric. Measured troponin I concentration (ng/L).}
+\item{level}{Concentration level factor (L1-L6)}
+\item{day}{Day of measurement (D1-D5)}
+\item{run}{Run within day (R1-R2)}
+\item{replicate}{Replicate within run (1-2)}
+\item{value}{Measured concentration (ng/L)}
+\item{target}{Nominal target concentration (ng/L)}
 }
 }
 \source{
@@ -53,12 +51,12 @@ where approximately:
 
 This gives expected CVs of approximately:
 \itemize{
-\item 5 ng/L: ~5.8\%
-\item 10 ng/L: ~4.0\%
-\item 25 ng/L: ~3.2\%
-\item 50 ng/L: ~3.1\%
-\item 100 ng/L: ~3.0\%
-\item 500 ng/L: ~3.0\%
+\item 5 ng/L: ~5.5\%
+\item 10 ng/L: ~3.5\%
+\item 25 ng/L: ~3.0\%
+\item 50 ng/L: ~2.0\%
+\item 100 ng/L: ~2.0\%
+\item 500 ng/L: ~3.5\%
 }
 }
 \section{Clinical Context}{

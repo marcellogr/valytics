@@ -12,9 +12,9 @@ status](https://www.r-pkg.org/badges/version/valytics)](https://CRAN.R-project.o
 
 Statistical methods for analytical method comparison and validation
 studies. The package implements Bland-Altman analysis, Passing-Bablok
-regression, Deming regression, and quality goal specifications based on
-biological variation — approaches commonly used in clinical laboratory
-method validation.
+regression, Deming regression, precision experiments, and quality goal
+specifications based on biological variation — approaches commonly used
+in clinical laboratory method validation.
 
 ## Installation
 
@@ -39,6 +39,12 @@ pak::pak("marcellogr/valytics")
 through bias and limits of agreement - **Passing-Bablok regression**:
 Non-parametric regression robust to outliers - **Deming regression**:
 Errors-in-variables regression for method comparison
+
+**Precision Experiments** - **Variance component analysis**:
+Repeatability, intermediate precision, reproducibility - **Precision
+verification**: Chi-square test against manufacturer claims -
+**Precision profiles**: CV vs concentration modeling with functional
+sensitivity
 
 **Quality Specifications** - **Biological variation-based goals**:
 Calculate allowable total error from CV<sub>I</sub> and CV<sub>G</sub> -
@@ -163,6 +169,109 @@ plot(dm)
 
 <img src="man/figures/README-dm-plot-1.png" alt="Deming regression scatter plot with regression line and confidence band" width="100%" />
 
+## Precision Experiments
+
+### Variance Component Analysis
+
+``` r
+# Analyze precision from a multi-day, multi-run study
+data(troponin_precision)
+
+prec <- precision_study(
+  data = troponin_precision,
+  value = "value",
+  sample = "level",
+  day = "day",
+  run = "run"
+)
+
+prec
+#> 
+#> Precision Study Analysis
+#> --------------------------------------------- 
+#> n = 120 observations
+#> Design: day/run/replicate (inferred)
+#> Estimation: ANOVA (Method of Moments)
+#> CI method: Satterthwaite, 95% CI
+#> 
+#> Samples: 6 concentration levels
+#> (Showing results for first sample; use $by_sample for all)
+#> 
+#> Precision Estimates:
+#> --------------------------------------------- 
+#>   Repeatability:       SD = 0.243  (CV = 4.86%)
+#>                        95% CI: [0.170, 0.426]
+#>   Between-run:         SD = 0.188  (CV = 3.76%)
+#>                        95% CI: [0.117, 0.461]
+#>   Between-day:         SD = 0.000  (CV = 0.00%)
+#>                        95% CI: [0.000, 0.000]
+#>   Within-laboratory precision: SD = 0.307  (CV = 6.15%)
+#>                        95% CI: [0.227, 0.476]
+```
+
+``` r
+plot(prec, type = "cv")
+#> Warning in data.frame(sample = sample_names[i], mean_conc = if
+#> (!is.null(sample_means)) sample_means[sample_names[i]] else i, : Zeilennamen
+#> wurden in einer short Variablen gefunden und wurden verworfen
+
+#> Warning in data.frame(sample = sample_names[i], mean_conc = if
+#> (!is.null(sample_means)) sample_means[sample_names[i]] else i, : Zeilennamen
+#> wurden in einer short Variablen gefunden und wurden verworfen
+
+#> Warning in data.frame(sample = sample_names[i], mean_conc = if
+#> (!is.null(sample_means)) sample_means[sample_names[i]] else i, : Zeilennamen
+#> wurden in einer short Variablen gefunden und wurden verworfen
+
+#> Warning in data.frame(sample = sample_names[i], mean_conc = if
+#> (!is.null(sample_means)) sample_means[sample_names[i]] else i, : Zeilennamen
+#> wurden in einer short Variablen gefunden und wurden verworfen
+
+#> Warning in data.frame(sample = sample_names[i], mean_conc = if
+#> (!is.null(sample_means)) sample_means[sample_names[i]] else i, : Zeilennamen
+#> wurden in einer short Variablen gefunden und wurden verworfen
+
+#> Warning in data.frame(sample = sample_names[i], mean_conc = if
+#> (!is.null(sample_means)) sample_means[sample_names[i]] else i, : Zeilennamen
+#> wurden in einer short Variablen gefunden und wurden verworfen
+```
+
+<img src="man/figures/README-prec-plot-1.png" alt="CV profile showing precision measures with confidence intervals" width="100%" />
+
+### Precision Profiles and Functional Sensitivity
+
+``` r
+# Model CV vs concentration relationship
+prof <- precision_profile(prec, cv_target = 10)
+
+prof
+#> 
+#> Precision Profile Analysis
+#> ---------------------------------------- 
+#> n = 6 concentration levels
+#> Concentration range: 5 to 503 (100.75-fold)
+#> 
+#> Model: Hyperbolic
+#>   CV = sqrt(2.667^2 + (26.905/x)^2)
+#> 
+#> Parameters:
+#>   a = 2.667
+#>   b = 26.905
+#> 
+#> Fit Quality:
+#>   R-squared = 0.816
+#>   RMSE = 0.578
+#> 
+#> Functional Sensitivity:
+#>   CV = 10%: concentration = 2.792
+```
+
+``` r
+plot(prof)
+```
+
+<img src="man/figures/README-profile-plot-1.png" alt="Precision profile showing CV vs concentration with functional sensitivity" width="100%" />
+
 ## Quality Specifications
 
 ### Allowable Total Error from Biological Variation
@@ -247,10 +356,11 @@ assess
 
 - **Multiple interfaces**: Vector input or formula syntax
   (`method1 ~ method2`)
-- **Flexible CI methods**: Analytical or bootstrap BCa confidence
-  intervals
+- **Flexible CI methods**: Analytical, Satterthwaite, or bootstrap BCa
+  confidence intervals
 - **Assumption checking**: CUSUM linearity test, Shapiro-Wilk normality
   test
+- **Precision analysis**: ANOVA and REML variance component estimation
 - **Quality goals**: Biological variation-based specifications
   (optimal/desirable/minimum)
 - **Publication-ready plots**: Built on ggplot2, fully customizable
@@ -258,13 +368,14 @@ assess
 
 ## Example Datasets
 
-The package includes three realistic clinical datasets:
+The package includes four realistic clinical datasets:
 
-| Dataset            | Description                       | n   |
-|--------------------|-----------------------------------|-----|
-| `glucose_methods`  | POC meter vs. laboratory analyzer | 60  |
-| `creatinine_serum` | Enzymatic vs. Jaffe methods       | 80  |
-| `troponin_cardiac` | Two hs-cTnI platforms             | 50  |
+| Dataset              | Description                        | n   |
+|----------------------|------------------------------------|-----|
+| `glucose_methods`    | POC meter vs. laboratory analyzer  | 60  |
+| `creatinine_serum`   | Enzymatic vs. Jaffe methods        | 80  |
+| `troponin_cardiac`   | Two hs-cTnI platforms              | 50  |
+| `troponin_precision` | hs-cTnI precision study (6 levels) | 120 |
 
 ## Vignettes
 
@@ -274,6 +385,8 @@ The package includes three realistic clinical datasets:
   regression
 - **Quality Goals from Biological Variation**: Setting performance
   specifications
+- **Precision Profiles and Functional Sensitivity**: CV modeling and
+  functional sensitivity
 
 ## References
 
@@ -297,6 +410,13 @@ The package includes three realistic clinical datasets:
 - Linnet K (1990). Estimation of the linear relationship between the
   measurements of two methods with proportional errors. *Statistics in
   Medicine*, 9(12):1463-1473.
+
+**Precision:**
+
+- Chesher D (2008). Evaluating assay precision. *Clinical Biochemistry
+  Reviews*, 29(Suppl 1):S23-S26.
+- Kroll MH, Emancipator K (1993). A theoretical evaluation of linearity.
+  *Clinical Chemistry*, 39(3):405-413.
 
 **Biological Variation:**
 

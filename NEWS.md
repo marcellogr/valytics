@@ -1,3 +1,15 @@
+# valytics 0.4.1
+## Bug Fixes
+
+Fixed troponin_precision dataset which was generated with constant values
+(zero variance) at each concentration level. The dataset now contains realistic
+variability following a hyperbolic CV model, enabling proper demonstration of
+precision_study() and precision_profile() functions.
+
+## Documentation
+
+Updated README with precision experiments examples.
+
 # valytics 0.4.0
 
 ## New Features

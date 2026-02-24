@@ -11,7 +11,6 @@
   - ubuntu-latest (devel)
   - ubuntu-latest (release)
   - ubuntu-latest (oldrel-1)
-* R-hub: [platforms tested]
 * win-builder: R-devel
 
 ## Downstream dependencies
@@ -20,23 +19,12 @@ This package has no reverse dependencies.
 
 ## Notes for CRAN
 
-This is the second release of valytics to CRAN.
+This is a patch release (v0.4.1) that fixes a data generation bug in the 
+`troponin_precision` dataset included in v0.4.0. The dataset was generated 
+with constant values (zero variance) at each concentration level, which 
+caused `precision_profile()` examples and the associated vignette to fail.
 
-### Changes in this version (0.4.0)
+The dataset has been regenerated with realistic variability following a 
+hyperbolic CV model appropriate for high-sensitivity immunoassays.
 
-Major new functionality for precision experiments:
-
-* `precision_study()`: Variance component analysis for nested experimental 
-  designs with ANOVA and REML estimation methods
-
-* `verify_precision()`: Statistical verification of precision against 
-  manufacturer claims using chi-square hypothesis testing
-
-* `precision_profile()`: Modeling CV-concentration relationships for 
-  functional sensitivity estimation
-
-* New dataset: `troponin_precision` for precision study examples
-
-* New vignette: "Precision Profiles and Functional Sensitivity"
-
-The lme4 package has been added to Suggests for optional REML estimation.
+No changes to package functionality - only the example dataset was corrected.
